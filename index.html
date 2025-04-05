@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Tower Clash - Elixir Bar</title> <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* CSS - Added styles for Elixir Bar */
+        :root {
+            --primary-bg: #1e2a3a; --secondary-bg: #2c3e50; --tertiary-bg: #3b5970;
+            --accent-blue: #3498db; --accent-red: #e74c3c; --accent-green: #2ecc71;
+            --accent-purple: #9b59b6; --accent-yellow: #f1c40f; --accent-gray: #7f8c8d;
+            --text-light: #ecf0f1; --text-dark: #2c3e50; --border-color: #1a2531;
+            --card-bg: #4a6883; --elixir-color: var(--accent-purple);
+            --knight-color: '#bdc3c7'; --skeletons-color: '#ecf0f1'; --bats-color: '#512E5F';
+
+            --bg-gradient: linear-gradient(to bottom, #23344a, #1a2a3a);
+            --container-gradient: linear-gradient(to bottom, #3a4c60, #2c3e50);
+            --button-blue-gradient: linear-gradient(to bottom, #5dade2, #3498db);
+            --button-green-gradient: linear-gradient(to bottom, #58d68d, #2ecc71);
+            --button-gray-gradient: linear-gradient(to bottom, #95a5a6, #7f8c8d);
+            --button-purple-gradient: linear-gradient(to bottom, #af7ac5, #9b59b6);
+            --button-red-gradient: linear-gradient(to bottom, #ec7063, #e74c3c);
+            --button-white-gradient: linear-gradient(to bottom, #f8f9f9, #e5e7e9);
+            --button-silver-gradient: linear-gradient(to bottom, #e5e7e9, #bdc3c7); /* Knight */
+            --button-darkpurple-gradient: linear-gradient(to bottom, #7d3c98, #512e5f); /* Bats */
+            --button-orange-gradient: linear-gradient(to bottom, #f5b041, #f39c12); /* Fireball */
+            --canvas-gradient: linear-gradient(to bottom, #bdc3c7, #95a5a6);
+        }
+        body {
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+            min-height: 100vh; background-color: var(--primary-bg); background-image: var(--bg-gradient);
+            font-family: 'Press Start 2P', cursive; color: var(--text-light); margin: 0; padding-top: 20px; overflow-x: hidden;
+        }
+        /* Screen Containers */
+        .screen { display: none; width: 100%; max-width: 900px; padding: 20px; border: 5px solid var(--border-color); background-color: var(--secondary-bg); border-radius: 15px; box-shadow: 0 5px 25px rgba(0, 0, 0, 0.4); margin: 15px; box-sizing: border-box; }
+        .screen.active { display: block; }
+        /* General Styles */
+        h1, h2 { text-align: center; margin-bottom: 20px; color: var(--accent-red); text-shadow: 2px 2px #000; }
+        h1 { font-size: 1.8em; margin-top: 0; }
+        h2 { font-size: 1.4em; color: var(--accent-blue); }
+        button { /* Base button style */
+            font-family: 'Press Start 2P', cursive; padding: 10px 18px; border: none; border-radius: 8px;
+            cursor: pointer; background-color: var(--accent-blue); color: white; text-shadow: 1px 1px #000;
+            transition: all 0.2s ease; box-shadow: 0 4px #1f618d; font-size: 0.9em;
+        }
+        button:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); box-shadow: 0 5px #1f618d; }
+        button:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 2px #1f618d; }
+        button:disabled { background-color: var(--accent-gray); cursor: not-allowed; box-shadow: 0 4px #566573; opacity: 0.7; }
+        #resetButton { background-image: var(--button-red-gradient); border: 2px solid rgba(0,0,0,0.5); border-top-color: rgba(255,255,255,0.2); border-left-color: rgba(255,255,255,0.2); box-shadow: 0 5px 0px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.2); }
+        #resetButton:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 7px 0px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.2); }
+        #resetButton:active:not(:disabled) { transform: translateY(2px); filter: brightness(0.9); box-shadow: 0 2px 0px rgba(0,0,0,0.3), inset 0 2px 3px rgba(0,0,0,0.3); }
+
+        /* Deck Builder Screen */
+        #deckBuilderScreen h2 { margin-top: 25px; }
+        .deck-areas { display: flex; flex-direction: column; gap: 20px; }
+        #cardLibrary, #selectedDeck { display: flex; flex-wrap: wrap; gap: 10px; padding: 15px; background-color: var(--tertiary-bg); border-radius: 10px; min-height: 100px; justify-content: center; }
+        #selectedDeck { border: 3px dashed var(--accent-green); min-height: 95px; max-width: 600px; margin: 0 auto; } /* Width for 8 cards */
+        .deck-slot-placeholder { width: 70px; height: 90px; background-color: rgba(0,0,0,0.2); border: 2px dashed var(--border-color); border-radius: 5px; box-sizing: border-box; }
+        .card { /* Style for cards in library/deck */
+            width: 70px; height: 90px; background-color: var(--card-bg); border: 2px solid var(--border-color); border-radius: 5px;
+            display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 5px; box-sizing: border-box;
+            cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; position: relative; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+        .card:hover { transform: scale(1.05); border-color: var(--accent-yellow); box-shadow: 0 4px 10px rgba(0,0,0,0.4); }
+        .card.disabled-card { opacity: 0.5; cursor: not-allowed; background-color: #555; }
+        .card.disabled-card:hover { transform: none; border-color: var(--border-color); box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+        .card-cost { position: absolute; top: 2px; left: 2px; background-color: var(--elixir-color); color: white; font-size: 0.7em; padding: 2px 4px; border-radius: 3px; font-weight: bold; border: 1px solid rgba(255,255,255,0.5); z-index: 1; }
+        .card-name {
+            font-size: 0.6em; text-align: center; margin-top: auto;
+            color: var(--accent-yellow); text-shadow: 1px 1px 1px #000;
+            word-break: break-word; line-height: 1.1; width: 100%; padding-bottom: 2px;
+        }
+        .card-icon {
+            width: 45px; height: 55px; margin-top: 18px; margin-bottom: 2px;
+            display: flex; align-items: center; justify-content: center; overflow: hidden;
+        }
+        .card-icon img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 3px; }
+         .card-icon .fallback-text { font-size: 0.8em; color: var(--text-light); text-align: center; }
+
+        #startBattleButton { display: block; margin: 25px auto 10px auto; padding: 12px 30px; font-size: 1.1em; background-image: var(--button-green-gradient); border: 2px solid rgba(0,0,0,0.5); border-top-color: rgba(255,255,255,0.2); border-left-color: rgba(255,255,255,0.2); box-shadow: 0 5px 0px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.2); }
+        #startBattleButton:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 7px 0px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.2); }
+
+        /* Battle Screen */
+        .game-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; font-size: 0.9em; flex-wrap: wrap; gap: 10px; background-color: rgba(0,0,0,0.2); padding: 10px 15px; border-radius: 10px; border: 2px solid rgba(0,0,0,0.3); }
+        #player-stats, #enemy-stats, #game-timer-container { text-align: center; padding: 8px 12px; background: linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(0,0,0,0.05)); border-radius: 8px; flex-grow: 1; flex-basis: 150px; box-shadow: inset 0 1px 2px rgba(0,0,0,0.3); }
+        #player-stats { border-left: 5px solid var(--accent-blue); }
+        #enemy-stats { border-right: 5px solid var(--accent-red); }
+        #game-timer-container { border-bottom: 5px solid var(--accent-yellow); flex-basis: 100px; padding: 10px 5px; }
+        #player-elixir-display, #player-tower-hp, #enemy-tower-hp, #gameTimerDisplay { display: block; margin-top: 8px; font-weight: bold; text-shadow: 1px 1px 1px #000; }
+        #player-tower-hp, #enemy-tower-hp { font-size: 1.0em; }
+        #gameTimerDisplay { color: var(--accent-yellow); font-size: 1.4em; }
+
+        /* --- Elixir Bar Styles --- */
+        #player-elixir-display {
+            /* Container for text and bar */
+            background-color: transparent; /* Remove background from span */
+            padding: 0;
+            display: block; /* Make it block to contain children */
+            margin-top: 10px;
+        }
+        .elixir-text {
+            display: block; /* Text on its own line */
+            font-size: 1.0em; /* Adjust text size */
+            margin-bottom: 4px;
+             color: var(--text-light); /* Ensure text is visible */
+             text-shadow: 1px 1px 1px #000;
+        }
+        .elixir-bar-container {
+            width: 100%; /* Full width of its container */
+            max-width: 120px; /* Max width of the bar */
+            height: 12px; /* Height of the bar */
+            background-color: rgba(0, 0, 0, 0.4); /* Dark background */
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            overflow: hidden; /* Keep fill inside */
+            margin: 0 auto; /* Center the bar */
+        }
+        .elixir-bar-fill {
+            height: 100%;
+            width: 0%; /* Start empty, width controlled by JS */
+            background-color: var(--elixir-color); /* Purple fill */
+            border-radius: 3px; /* Slightly rounded inner fill */
+            transition: width 0.2s ease-out; /* Smooth transition */
+            box-shadow: inset 0 0 3px rgba(255,255,255,0.3); /* Inner highlight */
+        }
+        /* --- End Elixir Bar Styles --- */
+
+
+        #gameCanvas { display: block; background-color: #aaa; background-image: var(--canvas-gradient); border: 4px solid var(--text-dark); margin: 0 auto 20px auto; max-width: 100%; height: auto; border-radius: 8px; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); cursor: default; }
+        #targetingIndicator { position: absolute; border: 3px dashed var(--accent-red); border-radius: 50%; background-color: rgba(231, 76, 60, 0.2); pointer-events: none; display: none; box-sizing: border-box; z-index: 5; }
+        #battleControls { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 15px; padding: 10px; background-color: var(--tertiary-bg); border-radius: 8px; min-height: 95px; border: 2px solid rgba(0,0,0,0.3); }
+        button.deploy-button {
+             width: 65px; height: 85px; background-color: var(--card-bg); border: 2px solid var(--border-color); border-radius: 5px;
+             display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 5px; box-sizing: border-box;
+             cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease; position: relative; overflow: hidden;
+             box-shadow: 0 2px 5px rgba(0,0,0,0.3); font-size: 0.6em; text-shadow: none;
+             color: var(--text-light); /* Default color for name, overridden by .card-name */
+        }
+        button.deploy-button:hover:not(:disabled) { transform: scale(1.05); border-color: var(--accent-yellow); box-shadow: 0 4px 10px rgba(0,0,0,0.4); filter: brightness(1.1); }
+        button.deploy-button:active:not(:disabled) { transform: scale(1.02); box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
+        button.deploy-button:disabled { opacity: 0.5; cursor: not-allowed; background-color: #555; transform: none; box-shadow: 0 2px 5px rgba(0,0,0,0.3); border-color: var(--border-color); filter: grayscale(50%);}
+        .deploy-button .card-cost {}
+        .deploy-button .card-icon { width: 45px; height: 55px; margin-top: 18px; margin-bottom: 2px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .deploy-button .card-icon img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 3px; }
+        .deploy-button .card-icon .fallback-text { font-size: 0.8em; color: var(--text-light); text-align: center; }
+        .deploy-button .card-name { /* Inherits .card-name style */ margin-top: auto; }
+        #messageBox { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: linear-gradient(to bottom, rgba(44, 62, 80, 0.95), rgba(26, 42, 58, 0.95)); color: #fff; padding: 40px 50px; border-radius: 15px; font-size: 2.2em; text-align: center; display: none; z-index: 1000; border: 5px solid var(--accent-red); white-space: pre-line; box-shadow: 0 10px 40px rgba(0,0,0,0.6), inset 0 0 10px rgba(0,0,0,0.4); text-shadow: 2px 2px 3px #000; }
+
+    </style>
+</head>
+<body>
+
+    <div id="deckBuilderScreen" class="screen active">
+        <h1>Build Your Deck</h1>
+        <div class="deck-areas">
+            <div>
+                <h2>Selected Deck (Click to Remove) - Select 8</h2>
+                <div id="selectedDeck"></div>
+            </div>
+            <div>
+                <h2>Card Library (Click to Add)</h2>
+                <div id="cardLibrary"></div>
+            </div>
+        </div>
+        <button id="startBattleButton" disabled>Start Battle (Select 8 Cards)</button>
+    </div>
+
+    <div id="battleScreen" class="screen">
+        <h1>Battle!</h1>
+        <div class="game-info">
+            <div id="player-stats"> Player
+                 <span id="player-tower-hp">King HP: 1000</span>
+                 <span id="player-elixir-display">
+                     <span class="elixir-text">Elixir: 3 / 10</span>
+                     <div class="elixir-bar-container">
+                         <div class="elixir-bar-fill"></div>
+                     </div>
+                 </span>
+                 </div>
+            <div id="game-timer-container"> Time Left <span id="gameTimerDisplay">3:00</span> </div>
+            <div id="enemy-stats"> Enemy <span id="enemy-tower-hp">King HP: 1000</span> </div>
+        </div>
+        <div style="position: relative; max-width: 800px; margin: 0 auto 15px auto;">
+             <canvas id="gameCanvas" width="800" height="250"></canvas>
+             <div id="targetingIndicator"></div>
+        </div>
+        <div id="battleControls"></div>
+        <button id="resetButton">End Battle & Build Deck</button>
+    </div>
+
+    <div id="messageBox">You Win!</div>
+
+
+    <script>
+        // --- DOM Elements ---
+        const deckBuilderScreen = document.getElementById('deckBuilderScreen');
+        const battleScreen = document.getElementById('battleScreen');
+        const cardLibraryContainer = document.getElementById('cardLibrary');
+        const selectedDeckContainer = document.getElementById('selectedDeck');
+        const startBattleButton = document.getElementById('startBattleButton');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas ? canvas.getContext('2d') : null;
+        const playerElixirDisplaySpan = document.querySelector('#player-elixir-display .elixir-text'); // Get text span
+        const playerElixirBarFill = document.querySelector('#player-elixir-display .elixir-bar-fill'); // Get bar fill div
+        const playerTowerHpDisplay = document.getElementById('player-tower-hp');
+        const enemyTowerHpDisplay = document.getElementById('enemy-tower-hp');
+        const battleControlsContainer = document.getElementById('battleControls');
+        const messageBox = document.getElementById('messageBox');
+        const resetButton = document.getElementById('resetButton');
+        const gameTimerDisplay = document.getElementById('gameTimerDisplay');
+        const targetingIndicator = document.getElementById('targetingIndicator');
+
+        // --- Game Configuration ---
+        const KING_TOWER_HP = 1000; const PRINCESS_TOWER_HP = 600; const TOWER_RANGE = 150;
+        const KING_TOWER_DAMAGE = 10; const PRINCESS_TOWER_DAMAGE = 12; const TOWER_ATTACK_SPEED = 1000;
+        const KING_TOWER_WIDTH = 60; const KING_TOWER_HEIGHT = 100; const PRINCESS_TOWER_WIDTH = 45; const PRINCESS_TOWER_HEIGHT = 75;
+        const MAX_ELIXIR = 10; const ELIXIR_REGEN_RATE = 1; const ELIXIR_REGEN_INTERVAL = 1000;
+        const BATTLE_DURATION_SECONDS = 180; const TIEBREAKER_HP_DRAIN_RATE = 15; const TIEBREAKER_DRAIN_INTERVAL = 500;
+        const DECK_SIZE = 8;
+
+        // --- Card Library with imageUrl ---
+        const PLACEHOLDER_URL_BASE = "https://placehold.co/60x80/4a6883/ecf0f1?text=";
+        const FULL_CARD_LIBRARY = [
+            { id: 'melee', name: 'Mini Pekka', type: 'unit', cost: 4, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000018.webp`, stats: { hp: 100, damage: 15, speed: 1.5, range: 25, attackSpeed: 800, size: 20, color: '#3498db', shape: 'square', maxHp: 100 } },
+            { id: 'ranged', name: 'Archer', type: 'unit', cost: 3, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000001.webp`, stats: { hp: 60, damage: 10, speed: 1.2, range: 100, attackSpeed: 1000, size: 18, color: '#2ecc71', shape: 'circle', maxHp: 60 } },
+            { id: 'tank', name: 'Giant', type: 'unit', cost: 5, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000003.webp`, stats: { hp: 250, damage: 10, speed: 0.8, range: 25, attackSpeed: 1200, size: 25, color: '#7f8c8d', shape: 'square', maxHp: 250 } },
+            { id: 'assassin', name: 'Bandit', type: 'unit', cost: 3, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000046.webp`, stats: { hp: 80, damage: 35, speed: 2.0, range: 25, attackSpeed: 900, size: 18, color: '#8e44ad', shape: 'diamond', maxHp: 80 } },
+            { id: 'skeletons', name: 'Skeletons', type: 'unit', cost: 1, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000010.webp`, stats: { spawnCount: 3, unitStats: { hp: 15, damage: 5, speed: 1.8, range: 25, attackSpeed: 1000, size: 15, color: '#ecf0f1', shape: 'circle', maxHp: 15 } } },
+            { id: 'knight', name: 'Knight', type: 'unit', cost: 3, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000000.webp`, stats: { hp: 120, damage: 18, speed: 1.5, range: 25, attackSpeed: 900, size: 20, color: '#bdc3c7', shape: 'square', maxHp: 120 } },
+            { id: 'bats', name: 'Bats', type: 'unit', cost: 2, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000049.webp`, stats: { spawnCount: 3, unitStats: { hp: 15, damage: 6, speed: 2.2, range: 25, attackSpeed: 900, size: 15, color: '#512E5F', shape: 'diamond', maxHp: 15 } } },
+            { id: 'fireball', name: 'Fireball', type: 'spell', cost: 4, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/28000000.webp`, stats: { damage: 100, radius: 50, delay: 500 } },
+            { id: 'log', name: 'The Log', type: 'spell', cost: 2, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}LOG` },
+            { id: 'cannon', name: 'Cannon', type: 'building', cost: 3, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}CAN` },
+            { id: 'arrows', name: 'Arrows', type: 'spell', cost: 3, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}ARR` },
+            { id: 'zap_evo', name: 'Zap Evo', type: 'spell', cost: 2, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}ZAP` },
+            { id: 'mortar_evo', name: 'Mortar Evo', type: 'building', cost: 4, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}MOR` },
+            { id: 'princess', name: 'Princess', type: 'unit', cost: 3, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}PRI` },
+            { id: 'pekka', name: 'P.E.K.K.A', type: 'unit', cost: 7, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}PEK` },
+            { id: 'hogrider', name: 'Hog Rider', type: 'unit', cost: 4, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}HOG` },
+            { id: 'guards', name: 'Guards', type: 'unit', cost: 3, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}GUA` },
+            { id: 'icespirit', name: 'Ice Spirit', type: 'unit', cost: 1, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}ICE` },
+            { id: 'goblingang', name: 'Goblin Gang', type: 'unit', cost: 3, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}GG` },
+            { id: 'babydragon', name: 'Baby Dragon', type: 'unit', cost: 4, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}BD` },
+            { id: 'megaknight', name: 'Mega Knight', type: 'unit', cost: 7, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}MK` },
+            { id: 'poison', name: 'Poison', type: 'spell', cost: 4, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}POI` },
+            { id: 'golem', name: 'Golem', type: 'unit', cost: 8, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}GOL` },
+        ];
+        function getCardById(id) { return FULL_CARD_LIBRARY.find(card => card.id === id); }
+
+        const ENEMY_COLORS = { /* ... (no changes) ... */
+             melee: '#c0392b', ranged: '#f1c40f', tank: '#566573', assassin: '#d2b4de',
+             skeletons: '#bdc3c7', knight: '#95a5a6', bats: '#9B59B6'
+        }
+        const AI_DEPLOY_INTERVAL = 3000;
+        const AI_STARTING_ELIXIR = 5;
+
+        // --- Game State ---
+        let selectedDeck = [];
+        let playerElixir = 3;
+        let playerUnits = [];
+        let enemyUnits = [];
+        let projectiles = [];
+        let playerTowers = [];
+        let enemyTowers = [];
+        let elixirIntervalId = null;
+        let aiIntervalId = null;
+        let animationFrameId = null;
+        let gameOver = false;
+        let aiElixir = 5;
+        let gameTimerIntervalId = null;
+        let gameTimeRemaining = BATTLE_DURATION_SECONDS;
+        let isTiebreakerActive = false;
+        let tiebreakerIntervalId = null;
+        let tiebreakerEffectCounter = 0;
+        let isTargetingSpell = false;
+        let currentSpellType = null;
+
+        // --- Tower Initialization ---
+        function createTowers(isPlayer) { /* ... (no changes) ... */
+            const canvasWidth = canvas?.width || 800; const canvasHeight = canvas?.height || 250;
+            const kingY = canvasHeight / 2; const princessYOffset = 60;
+            const kingX = isPlayer ? 50 : canvasWidth - 50 - KING_TOWER_WIDTH;
+            const princessXOffset = KING_TOWER_WIDTH / 2 + PRINCESS_TOWER_WIDTH / 2 + 10;
+            const kingTower = { id: isPlayer ? 'player_king' : 'enemy_king', x: kingX, y: kingY, hp: KING_TOWER_HP, maxHp: KING_TOWER_HP, width: KING_TOWER_WIDTH, height: KING_TOWER_HEIGHT, range: TOWER_RANGE, damage: KING_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: true, color: isPlayer ? '#3498db' : '#e74c3c' };
+            const princessLeft = { id: isPlayer ? 'player_pleft' : 'enemy_pleft', x: kingX + (isPlayer ? princessXOffset : -princessXOffset), y: kingY - princessYOffset, hp: PRINCESS_TOWER_HP, maxHp: PRINCESS_TOWER_HP, width: PRINCESS_TOWER_WIDTH, height: PRINCESS_TOWER_HEIGHT, range: TOWER_RANGE, damage: PRINCESS_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: false, color: isPlayer ? '#5dade2' : '#ec7063' };
+            const princessRight = { id: isPlayer ? 'player_pright' : 'enemy_pright', x: kingX + (isPlayer ? princessXOffset : -princessXOffset), y: kingY + princessYOffset, hp: PRINCESS_TOWER_HP, maxHp: PRINCESS_TOWER_HP, width: PRINCESS_TOWER_WIDTH, height: PRINCESS_TOWER_HEIGHT, range: TOWER_RANGE, damage: PRINCESS_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: false, color: isPlayer ? '#5dade2' : '#ec7063' };
+            return [princessLeft, kingTower, princessRight];
+        }
+
+        // --- Utilities ---
+        function distance(x1, y1, x2, y2) { return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2)); }
+
+        // --- Drawing ---
+        function drawTower(tower) { /* ... (no changes) ... */
+             if (!ctx || !tower) return;
+             if (tower.hp > 0) {
+                 const heightModifier = tower.isKingTower ? 1 : 0.8; const widthModifier = tower.isKingTower ? 1 : 0.9;
+                 const actualHeight = tower.height * heightModifier; const actualWidth = tower.width * widthModifier;
+                 const healthBarY = tower.y - actualHeight / 2 - 15; const healthBarHeight = 10;
+                 ctx.fillStyle = tower.color; ctx.fillRect(tower.x, tower.y - actualHeight / 2, actualWidth, actualHeight);
+                 ctx.fillStyle = lightenColor(tower.color, 20);
+                 if (tower.isKingTower) { ctx.fillRect(tower.x + actualWidth * 0.1, tower.y - actualHeight / 2, actualWidth * 0.8, 10); }
+                  else { ctx.beginPath(); ctx.moveTo(tower.x, tower.y - actualHeight / 2); ctx.lineTo(tower.x + actualWidth / 2, tower.y - actualHeight / 2 - 10); ctx.lineTo(tower.x + actualWidth, tower.y - actualHeight / 2); ctx.closePath(); ctx.fill(); }
+                 drawHealthBar(tower.x, healthBarY, actualWidth, healthBarHeight, tower.hp, tower.maxHp, true, tower.color === (playerTowers[1]?.color || '#3498db'));
+                 const hpText = Math.max(0, Math.round(tower.hp)); const textX = tower.x + actualWidth / 2; const textY = healthBarY - 4;
+                 ctx.fillStyle = '#FFFFFF'; ctx.strokeStyle = '#000000'; ctx.lineWidth = 2;
+                 ctx.font = tower.isKingTower ? '10px "Press Start 2P"' : '9px "Press Start 2P"';
+                 ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+                 ctx.strokeText(hpText, textX, textY); ctx.fillText(hpText, textX, textY);
+             } else if (!tower.isKingTower) { drawRubble(tower.x, tower.y, tower.width * 0.9); }
+        }
+        function drawRubble(x, y, width) { /* ... (no changes) ... */
+            if (!ctx) return; const rubbleColor = '#6c757d'; const pieceSize = width / 4;
+            ctx.fillStyle = rubbleColor; const baseY = y + PRINCESS_TOWER_HEIGHT * 0.8 / 2 - pieceSize;
+            ctx.fillRect(x + width * 0.1, baseY, pieceSize, pieceSize);
+            ctx.fillRect(x + width * 0.6, baseY - pieceSize * 0.5, pieceSize * 1.2, pieceSize * 0.8);
+            ctx.fillRect(x + width * 0.3, baseY - pieceSize, pieceSize * 0.8, pieceSize * 1.2);
+            ctx.fillStyle = lightenColor(rubbleColor, -20);
+            ctx.fillRect(x + width * 0.5, baseY - pieceSize * 0.5, pieceSize, pieceSize * 0.7);
+        }
+        function drawUnit(unit) { /* ... (no changes) ... */
+            if (!ctx || !unit || !unit.stats || typeof unit.maxHp === 'undefined') return;
+            ctx.fillStyle = unit.color; ctx.beginPath();
+            const shape = unit.stats.shape || 'square'; const size = unit.stats.size || 15;
+            switch (shape) {
+                case 'circle': ctx.arc(unit.x, unit.y, size / 2, 0, Math.PI * 2); ctx.fill(); break;
+                case 'diamond': ctx.moveTo(unit.x, unit.y - size / 2); ctx.lineTo(unit.x + size / 2, unit.y); ctx.lineTo(unit.x, unit.y + size / 2); ctx.lineTo(unit.x - size / 2, unit.y); ctx.closePath(); ctx.fill(); break;
+                case 'square': default: ctx.fillRect(unit.x - size / 2, unit.y - size / 2, size, size); break;
+            } drawHealthBar(unit.x - size / 2, unit.y - size / 2 - 10, size, 5, unit.hp, unit.maxHp);
+        }
+        function drawHealthBar(x, y, width, height, currentHp, maxHp, isTowerBar = false, isPlayerTower = false) { /* ... (no changes) ... */
+             if (!ctx) return; const validMaxHp = Math.max(1, maxHp); const hpPercent = Math.max(0, currentHp) / validMaxHp;
+             ctx.fillStyle = isTowerBar ? '#7f8c8d' : '#e74c3c'; ctx.fillRect(x, y, width, height);
+             ctx.fillStyle = isTowerBar ? (isPlayerTower ? '#3498db' : '#e74c3c') : '#2ecc71';
+             ctx.fillRect(x, y, width * hpPercent, height);
+             ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 1; ctx.strokeRect(x, y, width, height);
+         }
+        function drawProjectile(p) { if (!ctx) return; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
+        function lightenColor(hex, percent) { /* ... (no changes) ... */
+            hex = hex.replace(/^\s*#|\s*$/g, ''); if(hex.length == 3){ hex = hex.replace(/(.)/g, '$1$1'); }
+            var bigint = parseInt(hex, 16); var r = (bigint >> 16) & 255; var g = (bigint >> 8) & 255; var b = bigint & 255;
+            r = Math.min(255, r + (255 * percent / 100)); g = Math.min(255, g + (255 * percent / 100)); b = Math.min(255, b + (255 * percent / 100));
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
+        // --- Deck Building ---
+        function renderCardLibrary() { /* ... (no changes) ... */
+            if (!cardLibraryContainer) return;
+            cardLibraryContainer.innerHTML = '';
+            FULL_CARD_LIBRARY.forEach(card => {
+                const cardElement = createCardElement(card, 'library');
+                cardLibraryContainer.appendChild(cardElement);
+            });
+        }
+        function renderSelectedDeck() { /* ... (no changes) ... */
+            if (!selectedDeckContainer) return;
+            selectedDeckContainer.innerHTML = '';
+            selectedDeck.forEach((cardId, index) => {
+                const card = getCardById(cardId);
+                if (card) {
+                    const cardElement = createCardElement(card, 'deck', index);
+                    selectedDeckContainer.appendChild(cardElement);
+                }
+            });
+            const placeholdersNeeded = DECK_SIZE - selectedDeck.length;
+            for (let i = 0; i < placeholdersNeeded; i++) {
+                const deckSlot = document.createElement('div');
+                deckSlot.classList.add('deck-slot-placeholder');
+                selectedDeckContainer.appendChild(deckSlot);
+            }
+            startBattleButton.disabled = selectedDeck.length !== DECK_SIZE;
+            startBattleButton.textContent = selectedDeck.length === DECK_SIZE ? "Start Battle!" : `Select ${DECK_SIZE - selectedDeck.length} More Cards`;
+        }
+        function createCardElement(card, location, index = -1) { /* ... (no changes) ... */
+            const cardElement = document.createElement('div');
+            cardElement.classList.add('card');
+            cardElement.dataset.id = card.id;
+            cardElement.dataset.type = card.type;
+            const costElement = document.createElement('div');
+            costElement.classList.add('card-cost');
+            costElement.textContent = card.cost;
+            cardElement.appendChild(costElement);
+            const iconContainer = document.createElement('div');
+            iconContainer.classList.add('card-icon');
+            if (card.imageUrl) {
+                const imgElement = document.createElement('img');
+                imgElement.src = card.imageUrl; imgElement.alt = card.name;
+                imgElement.onerror = function() { this.onerror = null; this.style.display = 'none'; const fallback = document.createElement('span'); fallback.classList.add('fallback-text'); const nameParts = card.name.split(' '); let initials = nameParts[0] ? nameParts[0][0] : '?'; if (nameParts.length > 1 && nameParts[1]) initials += nameParts[1][0]; fallback.textContent = initials.toUpperCase(); iconContainer.appendChild(fallback); };
+                iconContainer.appendChild(imgElement);
+            } else { const fallback = document.createElement('span'); fallback.classList.add('fallback-text'); const nameParts = card.name.split(' '); let initials = nameParts[0] ? nameParts[0][0] : '?'; if (nameParts.length > 1 && nameParts[1]) initials += nameParts[1][0]; fallback.textContent = initials.toUpperCase(); iconContainer.appendChild(fallback); }
+            cardElement.appendChild(iconContainer);
+            const nameElement = document.createElement('div');
+            nameElement.classList.add('card-name');
+            nameElement.textContent = card.name;
+            cardElement.appendChild(nameElement);
+             if (!card.implemented) { cardElement.classList.add('disabled-card'); nameElement.textContent += " (N/A)"; }
+            if (location === 'library' && card.implemented) { cardElement.addEventListener('click', () => { if (!selectedDeck.includes(card.id)) { addCardToDeck(card.id); } else { console.log(`${card.name} is already in the deck.`); } }); }
+             else if (location === 'deck') { cardElement.addEventListener('click', () => removeCardFromDeck(index)); }
+            return cardElement;
+        }
+        function addCardToDeck(cardId) { /* ... (no changes) ... */
+            if (selectedDeck.length < DECK_SIZE) { selectedDeck.push(cardId); renderSelectedDeck(); }
+             else { console.log("Deck is full!"); }
+        }
+        function removeCardFromDeck(index) { /* ... (no changes) ... */
+             if (index >= 0 && index < selectedDeck.length) { selectedDeck.splice(index, 1); renderSelectedDeck(); }
+              else { console.error("Invalid index for card removal:", index, selectedDeck); }
+        }
+
+        // --- Battle Logic ---
+        function populateBattleControls() { /* ... (no changes) ... */
+            if (!battleControlsContainer) return;
+            battleControlsContainer.innerHTML = '';
+            selectedDeck.forEach(cardId => {
+                const card = getCardById(cardId);
+                if (card) {
+                    const button = document.createElement('button');
+                    button.classList.add('deploy-button');
+                    button.dataset.id = card.id; button.dataset.type = card.type; button.dataset.cost = card.cost;
+                    button.disabled = !card.implemented || playerElixir < card.cost;
+                    const iconContainer = document.createElement('div'); iconContainer.classList.add('card-icon');
+                    if (card.imageUrl) { const imgElement = document.createElement('img'); imgElement.src = card.imageUrl; imgElement.alt = card.name; imgElement.onerror = function() { this.onerror = null; this.style.display = 'none'; const fallback = document.createElement('span'); fallback.classList.add('fallback-text'); const nameParts = card.name.split(' '); let initials = nameParts[0] ? nameParts[0][0] : '?'; if (nameParts.length > 1 && nameParts[1]) initials += nameParts[1][0]; fallback.textContent = initials.toUpperCase(); iconContainer.appendChild(fallback); }; iconContainer.appendChild(imgElement); }
+                     else { const fallback = document.createElement('span'); fallback.classList.add('fallback-text'); const nameParts = card.name.split(' '); let initials = nameParts[0] ? nameParts[0][0] : '?'; if (nameParts.length > 1 && nameParts[1]) initials += nameParts[1][0]; fallback.textContent = initials.toUpperCase(); iconContainer.appendChild(fallback); }
+                    button.innerHTML = ` <div class="card-cost">${card.cost}</div> ${iconContainer.outerHTML} <div class="card-name">${card.name}${!card.implemented ? ' (N/A)' : ''}</div> `;
+                    if(card.id === 'knight') button.style.backgroundImage = 'var(--button-silver-gradient)';
+                    else if(card.id === 'bats') button.style.backgroundImage = 'var(--button-darkpurple-gradient)';
+                    else if(card.id === 'skeletons') { button.style.backgroundImage = 'var(--button-white-gradient)'; button.style.color = '#333'; button.style.textShadow = 'none';}
+                    else if(card.id === 'fireball') button.style.backgroundImage = 'var(--button-orange-gradient)';
+                    if (card.implemented) { /* Listener added in setup */ }
+                    battleControlsContainer.appendChild(button);
+                }
+            });
+             setupDeployButtonListeners();
+        }
+
+        // --- Spell Logic ---
+        function handleDeployAction(cardId) { /* ... (no changes) ... */
+             const card = getCardById(cardId);
+             if (!card || !card.implemented) { console.error("handleDeployAction called with invalid/unimplemented card:", cardId); return; };
+             if (card.type === 'unit') { deployUnit(card.id, true); }
+             else if (card.type === 'spell') { startSpellTargeting(card.id); }
+        }
+        function startSpellTargeting(spellId) { /* ... (no changes) ... */
+             const spellCard = getCardById(spellId);
+             if (isTargetingSpell || !canvas || !spellCard || spellCard.type !== 'spell') return;
+             console.log(`Targeting ${spellId}...`);
+             isTargetingSpell = true; currentSpellType = spellId; canvas.style.cursor = 'crosshair';
+             updateBattleButtons();
+             if (targetingIndicator && spellCard.stats.radius) {
+                 const radius = spellCard.stats.radius * (canvas.width / 800);
+                 targetingIndicator.style.width = `${radius * 2}px`;
+                 targetingIndicator.style.height = `${radius * 2}px`;
+                 targetingIndicator.style.display = 'block';
+                 targetingIndicator.style.borderColor = 'var(--accent-red)';
+                 targetingIndicator.style.backgroundColor = 'rgba(231, 76, 60, 0.2)';
+                 canvas.addEventListener('mousemove', updateTargetingIndicator);
+             }
+             canvas.addEventListener('mousedown', handleSpellCast, { once: true });
+        }
+         function updateTargetingIndicator(event) { /* ... (no changes) ... */
+             if (!isTargetingSpell || !currentSpellType || !targetingIndicator || !canvas) return;
+             const rect = canvas.getBoundingClientRect(); const x = event.clientX - rect.left; const y = event.clientY - rect.top;
+             const indicatorSize = targetingIndicator.offsetWidth;
+             const clampedX = Math.max(indicatorSize / 2, Math.min(canvas.width - indicatorSize / 2, x));
+             const clampedY = Math.max(indicatorSize / 2, Math.min(canvas.height - indicatorSize / 2, y));
+             targetingIndicator.style.left = `${clampedX - indicatorSize / 2}px`;
+             targetingIndicator.style.top = `${clampedY - indicatorSize / 2}px`;
+         }
+        function handleSpellCast(event) { /* ... (no changes) ... */
+             if (!isTargetingSpell || !currentSpellType || !canvas) return;
+             event.preventDefault();
+             const rect = canvas.getBoundingClientRect(); const targetX = event.clientX - rect.left; const targetY = event.clientY - rect.top;
+             const spellCard = getCardById(currentSpellType);
+             console.log(`Casting ${currentSpellType} at (${targetX.toFixed(0)}, ${targetY.toFixed(0)})`);
+             setTimeout(() => { executeSpellEffect(currentSpellType, targetX, targetY); }, spellCard.stats.delay || 0);
+             isTargetingSpell = false; currentSpellType = null; canvas.style.cursor = 'default';
+             if (targetingIndicator) targetingIndicator.style.display = 'none';
+             canvas.removeEventListener('mousemove', updateTargetingIndicator);
+             updateBattleButtons();
+        }
+        function executeSpellEffect(spellId, x, y) { /* ... (no changes) ... */
+             const spellCard = getCardById(spellId);
+             if (!spellCard || spellCard.type !== 'spell') return;
+             console.log(`Executing ${spellId} effect.`);
+             const radius = spellCard.stats.radius; const damage = spellCard.stats.damage;
+             if (ctx) { ctx.fillStyle = 'rgba(255, 165, 0, 0.7)'; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill(); }
+             [...enemyUnits, ...enemyTowers].forEach(target => {
+                 if (!target || target.hp <= 0) return;
+                 const targetX = target.x + (target.isTower ? target.width / 2 : 0); const targetY = target.y;
+                 if (distance(x, y, targetX, targetY) <= radius) { target.hp -= damage; console.log(`${spellId} hit ${target.isTower ? 'tower' : target.type || 'unit'} (ID: ${target.id})`); }
+             });
+             updateDisplays(); cleanupDeadUnits();
+        }
+
+        function updateElixir() { /* ... (no changes) ... */
+            if (gameOver || isTiebreakerActive) return;
+            if (playerElixir < MAX_ELIXIR) { playerElixir = Math.min(MAX_ELIXIR, playerElixir + ELIXIR_REGEN_RATE); }
+            aiElixir += ELIXIR_REGEN_RATE; updateDisplays(); updateBattleButtons();
+        }
+        function deployUnit(cardId, isPlayer) { /* ... (no changes) ... */
+             const card = getCardById(cardId);
+             if (!card || card.type !== 'unit') { console.error("Invalid unit type for deployment:", cardId); return; }
+             const kingTowerX = isPlayer ? playerTowers[1].x : enemyTowers[1].x;
+             const spawnXBase = kingTowerX + (isPlayer ? playerTowers[1].width + 20 : -20 - (card.stats.size || card.stats.unitStats?.size || 15));
+             const spawnYBase = canvas.height / 2;
+             if (card.stats.spawnCount && card.stats.unitStats) { // Multi-spawn
+                 const unitStats = card.stats.unitStats; const spawnCount = card.stats.spawnCount; const enemyColor = ENEMY_COLORS[cardId] || '#FFFFFF';
+                 for (let i = 0; i < spawnCount; i++) {
+                     const spawnYOffset = (Math.random() - 0.5) * 30 * spawnCount; const spawnXOffset = (Math.random() - 0.5) * 10;
+                     const newUnit = { id: `${cardId}_${Date.now()}_${Math.random()}_${i}`, type: cardId, stats: { ...unitStats }, x: spawnXBase + spawnXOffset, y: spawnYBase + spawnYOffset, isPlayer: isPlayer, hp: unitStats.hp, maxHp: unitStats.maxHp, color: isPlayer ? unitStats.color : enemyColor, target: null, lastAttackTime: 0, };
+                     if (isPlayer) playerUnits.push(newUnit); else enemyUnits.push(newUnit);
+                 }
+             } else { // Single-spawn
+                 const stats = card.stats; const enemyColor = ENEMY_COLORS[cardId] || '#FFFFFF';
+                 const newUnit = { id: `${cardId}_${Date.now()}_${Math.random()}`, type: cardId, stats: { ...stats }, x: spawnXBase, y: spawnYBase + (Math.random() * 40 - 20), isPlayer: isPlayer, hp: stats.hp, maxHp: stats.maxHp, color: isPlayer ? stats.color : enemyColor, target: null, lastAttackTime: 0, };
+                 if (isPlayer) playerUnits.push(newUnit); else enemyUnits.push(newUnit);
+             }
+         }
+
+        // --- Targeting, Movement, Attack Logic ---
+        function findTarget(unit, potentialEnemyUnits, potentialEnemyTowers) { /* ... (no changes) ... */
+             let closestTarget = null; let minDistance = Infinity;
+             if (!unit || !unit.stats) return null; const unitRange = unit.stats.range;
+             potentialEnemyUnits.forEach(target => {
+                  if(!target || target.hp <= 0) return;
+                 const targetCenterX = target.x + (target.isTower ? target.width / 2 : 0); const targetCenterY = target.y;
+                 const d = distance(unit.x, unit.y, targetCenterX, targetCenterY);
+                 if (!target.isTower && d < minDistance && d <= unitRange) { minDistance = d; closestTarget = target; }
+             });
+             if (!closestTarget) {
+                 potentialEnemyTowers.forEach(targetTower => {
+                     if (!targetTower || targetTower.hp <= 0) return;
+                     const targetCenterX = targetTower.x + targetTower.width / 2; const targetCenterY = targetTower.y;
+                     const d = distance(unit.x, unit.y, targetCenterX, targetCenterY);
+                     if (d < minDistance && d <= unitRange) { minDistance = d; closestTarget = targetTower; }
+                 });
+             } return closestTarget;
+        }
+         function findTowerTarget(tower, potentialEnemyUnits) { /* ... (no changes) ... */
+             let closestTarget = null; let minDistance = tower.range;
+             if (!tower || tower.hp <= 0) return null;
+             potentialEnemyUnits.forEach(target => {
+                  if(!target || target.hp <= 0) return;
+                 const d = distance(tower.x + tower.width / 2, tower.y, target.x, target.y);
+                 if (d < minDistance) { minDistance = d; closestTarget = target; }
+             }); return closestTarget;
+         }
+        function updateUnits(units, enemyUnitsList, enemyTowersList) { /* ... (no changes) ... */
+            if (isTiebreakerActive) return;
+            const currentTime = Date.now();
+            for (let i = units.length - 1; i >= 0; i--) {
+                const unit = units[i];
+                 if (!unit || unit.hp <= 0 || !unit.stats) continue;
+                 let targetNeedsUpdate = !unit.target || unit.target.hp <= 0;
+                 if (targetNeedsUpdate) { unit.target = findTarget(unit, enemyUnitsList, enemyTowersList); }
+                let isAttacking = false;
+                if (unit.target) {
+                    const targetWidth = unit.target.isTower ? unit.target.width : (unit.target.stats ? unit.target.stats.size : 0);
+                    const targetCenterX = unit.target.x + (targetWidth / 2); const targetCenterY = unit.target.y;
+                    const distToTarget = distance(unit.x, unit.y, targetCenterX, targetCenterY);
+                    if (distToTarget <= unit.stats.range) {
+                        isAttacking = true;
+                        if (currentTime - unit.lastAttackTime >= unit.stats.attackSpeed) {
+                             if (unit.stats.range > 30) { projectiles.push({ x: unit.x, y: unit.y, target: unit.target, speed: 5, damage: unit.stats.damage, color: unit.color, size: 5, isPlayerProjectile: unit.isPlayer }); }
+                              else { unit.target.hp -= unit.stats.damage; }
+                             unit.lastAttackTime = currentTime;
+                             if (unit.target.hp <= 0) { unit.target = null; isAttacking = false; }
+                        }
+                    } else { unit.target = null; }
+                }
+                 if (!isAttacking) { const direction = unit.isPlayer ? 1 : -1; unit.x += unit.stats.speed * direction; }
+            }
+        }
+         function updateTowers(towers, enemyUnitsList) { /* ... (no changes) ... */
+             if (isTiebreakerActive) return;
+             const currentTime = Date.now();
+             towers.forEach(tower => {
+                 if (tower.hp > 0) {
+                     const target = findTowerTarget(tower, enemyUnitsList);
+                     if (target && currentTime - tower.lastAttackTime >= tower.attackSpeed) {
+                         const projectileStartX = tower.x + tower.width / 2 + (tower.isPlayer ? 10 : -10);
+                         projectiles.push({ x: projectileStartX, y: tower.y, target: target, speed: 6, damage: tower.damage, color: tower.color, size: 6, isPlayerProjectile: tower.color === playerTowers[1].color });
+                         tower.lastAttackTime = currentTime;
+                     }
+                 }
+             });
+         }
+        function updateProjectiles() { /* ... (no changes) ... */
+             if (isTiebreakerActive) return;
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                if (!p.target || p.target.hp <= 0) { projectiles.splice(i, 1); continue; }
+                const targetWidth = p.target.isTower ? p.target.width : (p.target.stats ? p.target.stats.size : 0);
+                const targetX = p.target.x + targetWidth / 2; const targetY = p.target.y;
+                const angle = Math.atan2(targetY - p.y, targetX - p.x);
+                p.x += Math.cos(angle) * p.speed; p.y += Math.sin(angle) * p.speed;
+                const hitRadius = p.target.isTower ? p.target.width / 2 : (p.target.stats ? p.target.stats.size / 2 : 10);
+                if (distance(p.x, p.y, targetX, targetY) < hitRadius) { p.target.hp -= p.damage; projectiles.splice(i, 1); }
+                 else if (p.x < -p.size || p.x > canvas.width + p.size || p.y < -p.size || p.y > canvas.height + p.size) { projectiles.splice(i, 1); }
+            }
+        }
+         function cleanupDeadUnits() { /* ... (no changes) ... */
+             playerUnits = playerUnits.filter(unit => unit && unit.hp > 0);
+             enemyUnits = enemyUnits.filter(unit => unit && unit.hp > 0);
+         }
+        function simpleAI() { /* ... (no changes) ... */
+             if (gameOver || isTiebreakerActive) return;
+             const deployableUnitCards = FULL_CARD_LIBRARY.filter(card => card.implemented && card.type === 'unit');
+             if (deployableUnitCards.length === 0) return;
+             const randomCard = deployableUnitCards[Math.floor(Math.random() * deployableUnitCards.length)];
+             if (aiElixir >= randomCard.cost) { deployUnit(randomCard.id, false); }
+         }
+
+         // --- Game Over Check ---
+         function checkGameOver(timeUp = false) { /* ... (no changes) ... */
+             if (gameOver) return; let winner = null;
+             const playerKingTower = playerTowers[1]; const enemyKingTower = enemyTowers[1];
+             if (enemyKingTower.hp <= 0) { winner = 'Player'; }
+             else if (playerKingTower.hp <= 0) { winner = 'Enemy'; }
+             else if (timeUp && !isTiebreakerActive) {
+                 console.log("Time's up! Checking tower HP for tiebreaker.");
+                 if (playerKingTower.hp > enemyKingTower.hp) { winner = 'Player'; }
+                 else if (enemyKingTower.hp > playerKingTower.hp) { winner = 'Enemy'; }
+                 else { startTiebreaker(); return; }
+             }
+             if (winner) {
+                 gameOver = true; stopGameTimers(); console.log("Game Over! Winner:", winner);
+                 if (winner === 'Player') { showMessage("You Win!"); }
+                 else if (winner === 'Enemy') { showMessage("You Lose!"); }
+                 updateBattleButtons();
+                 console.log("Switching back to deck builder in 3 seconds...");
+                 setTimeout(switchToDeckBuilder, 3000);
+             }
+         }
+
+         // --- Tiebreaker Functions ---
+         function startTiebreaker() { /* ... (no changes) ... */
+             if (isTiebreakerActive) return;
+             console.log("TIEBREAKER STARTED!");
+             isTiebreakerActive = true;
+             clearInterval(elixirIntervalId); elixirIntervalId = null;
+             clearInterval(aiIntervalId); aiIntervalId = null;
+             clearInterval(gameTimerIntervalId); gameTimerIntervalId = null;
+             playerUnits = []; enemyUnits = []; projectiles = [];
+             updateBattleButtons();
+             showMessage("TIEBREAKER!"); setTimeout(hideMessage, 2000);
+             if (tiebreakerIntervalId) clearInterval(tiebreakerIntervalId);
+             tiebreakerIntervalId = setInterval(drainTowerHp, TIEBREAKER_DRAIN_INTERVAL);
+         }
+         function drainTowerHp() { /* ... (no changes) ... */
+             if (!isTiebreakerActive || gameOver) { stopGameTimers(); return; }
+             const drainAmount = TIEBREAKER_HP_DRAIN_RATE * (TIEBREAKER_DRAIN_INTERVAL / 1000);
+             playerTowers[1].hp -= drainAmount;
+             enemyTowers[1].hp -= drainAmount;
+             updateDisplays();
+             checkGameOver();
+         }
+
+         // --- stopGameTimers (Includes spell state reset) ---
+        function stopGameTimers() { /* ... (no changes) ... */
+             clearInterval(elixirIntervalId); elixirIntervalId = null;
+             clearInterval(aiIntervalId); aiIntervalId = null;
+             clearInterval(gameTimerIntervalId); gameTimerIntervalId = null;
+             clearInterval(tiebreakerIntervalId); tiebreakerIntervalId = null;
+             cancelAnimationFrame(animationFrameId); animationFrameId = null;
+             isTargetingSpell = false; currentSpellType = null; if(canvas) canvas.style.cursor = 'default';
+             if(canvas) canvas.removeEventListener('mousedown', handleSpellCast);
+             if(canvas) canvas.removeEventListener('mousemove', updateTargetingIndicator);
+             if (targetingIndicator) targetingIndicator.style.display = 'none';
+        }
+
+        // --- Timer Logic ---
+        function startGameTimer() { /* ... (no changes) ... */
+            gameTimeRemaining = BATTLE_DURATION_SECONDS; updateTimerDisplay();
+            if (gameTimerIntervalId) clearInterval(gameTimerIntervalId);
+            gameTimerIntervalId = setInterval(() => {
+                if (gameOver) { stopGameTimers(); return; }
+                gameTimeRemaining--; updateTimerDisplay();
+                if (gameTimeRemaining <= 0 && !gameOver) { checkGameOver(true); }
+            }, 1000);
+        }
+        function updateTimerDisplay() { /* ... (no changes) ... */
+            if (!gameTimerDisplay) return;
+            const minutes = Math.floor(Math.max(0, gameTimeRemaining) / 60);
+            const seconds = Math.max(0, gameTimeRemaining) % 60;
+            gameTimerDisplay.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+        }
+
+        // --- Displays and Buttons ---
+        // --- Modified updateDisplays to include Elixir Bar ---
+        function updateDisplays() {
+            if (!playerElixirDisplaySpan || !playerTowerHpDisplay || !enemyTowerHpDisplay || !playerElixirBarFill) return;
+            // Update Text
+            playerElixirDisplaySpan.textContent = `Elixir: ${playerElixir} / ${MAX_ELIXIR}`;
+            const playerKingHp = playerTowers[1] ? Math.max(0, Math.round(playerTowers[1].hp)) : 'N/A';
+            const enemyKingHp = enemyTowers[1] ? Math.max(0, Math.round(enemyTowers[1].hp)) : 'N/A';
+            playerTowerHpDisplay.textContent = `King HP: ${playerKingHp}/${KING_TOWER_HP}`;
+            enemyTowerHpDisplay.textContent = `King HP: ${enemyKingHp}/${KING_TOWER_HP}`;
+            // Update Bar
+            const elixirPercentage = (playerElixir / MAX_ELIXIR) * 100;
+            playerElixirBarFill.style.width = `${elixirPercentage}%`;
+        }
+         // Update buttons (Includes spell targeting check)
+         function updateBattleButtons() { /* ... (no changes) ... */
+             const buttons = battleControlsContainer ? battleControlsContainer.querySelectorAll('.deploy-button') : [];
+             buttons.forEach(button => {
+                 const cardId = button.dataset.id;
+                 const card = getCardById(cardId);
+                 if (card) { button.disabled = !card.implemented || playerElixir < card.cost || gameOver || isTiebreakerActive || isTargetingSpell; }
+                  else { button.disabled = true; }
+             });
+         }
+        function showMessage(text) { if(messageBox) { messageBox.textContent = text; messageBox.style.display = 'block'; } }
+        function hideMessage() { if(messageBox) messageBox.style.display = 'none'; }
+
+        // --- Game Loop ---
+        function gameLoop() { /* ... (no changes) ... */
+            if (gameOver) { animationFrameId = null; return; }
+            const currentTime = Date.now();
+            if (!ctx) { console.error("Canvas context lost during loop!"); stopGameTimers(); return; }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            try {
+                if (!isTiebreakerActive) {
+                    updateProjectiles(); updateUnits(playerUnits, enemyUnits, enemyTowers); updateUnits(enemyUnits, playerUnits, playerTowers);
+                    updateTowers(playerTowers, enemyUnits); updateTowers(enemyTowers, playerUnits);
+                    cleanupDeadUnits();
+                }
+                updateDisplays();
+            } catch (error) { console.error("Error during game update:", error); stopGameTimers(); showMessage("An error occurred!"); return; }
+            try {
+                playerTowers.forEach(drawTower); enemyTowers.forEach(drawTower);
+                if (!isTiebreakerActive) {
+                    playerUnits.forEach(drawUnit); enemyUnits.forEach(drawUnit);
+                    projectiles.forEach(drawProjectile);
+                } else {
+                    tiebreakerEffectCounter++;
+                    if (tiebreakerEffectCounter % 30 < 15) {
+                         [playerTowers[1], enemyTowers[1]].forEach(kingTower => {
+                             if (kingTower && kingTower.hp > 0) {
+                                 ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+                                 ctx.fillRect(kingTower.x, kingTower.y - kingTower.height / 2, kingTower.width, kingTower.height);
+                                 for(let i=0; i<3; i++) {
+                                     ctx.fillStyle = `rgba(255, ${Math.random()*155 + 100}, 0, 0.8)`;
+                                     ctx.beginPath(); ctx.arc(kingTower.x + Math.random() * kingTower.width, kingTower.y + (Math.random() - 0.5) * kingTower.height, Math.random() * 3 + 1, 0, Math.PI*2); ctx.fill();
+                                 }
+                             }
+                         });
+                    }
+                }
+            } catch (error) { console.error("Error during game drawing:", error); stopGameTimers(); showMessage("An error occurred during drawing!"); return; }
+             if (!isTiebreakerActive) { checkGameOver(false); }
+            if (!gameOver) { animationFrameId = requestAnimationFrame(gameLoop); }
+             else { animationFrameId = null; }
+        }
+
+        // --- Initialization ---
+        function initializeGame() { // Called by switchToBattle
+             console.log("Initializing Battle...");
+             gameOver = false; playerElixir = 3; aiElixir = AI_STARTING_ELIXIR;
+             playerUnits = []; enemyUnits = []; projectiles = [];
+             playerTowers = createTowers(true); enemyTowers = createTowers(false);
+             gameTimeRemaining = BATTLE_DURATION_SECONDS;
+             isTiebreakerActive = false; tiebreakerEffectCounter = 0;
+             isTargetingSpell = false; currentSpellType = null;
+
+             hideMessage();
+             stopGameTimers();
+
+             populateBattleControls();
+             updateDisplays(); updateBattleButtons();
+
+             if (ctx) {
+                 console.log("Drawing initial towers..."); ctx.clearRect(0, 0, canvas.width, canvas.height);
+                 playerTowers.forEach(drawTower); enemyTowers.forEach(drawTower);
+             } else { console.error("Cannot draw initial state - context missing."); return; }
+
+             console.log("Starting game intervals and loop...");
+             elixirIntervalId = setInterval(updateElixir, ELIXIR_REGEN_INTERVAL);
+             aiIntervalId = setInterval(simpleAI, AI_DEPLOY_INTERVAL);
+             startGameTimer();
+             if (animationFrameId) cancelAnimationFrame(animationFrameId);
+             animationFrameId = requestAnimationFrame(gameLoop);
+             console.log("Battle Started!");
+        }
+
+        // --- Screen Switching Logic ---
+        function switchToDeckBuilder() { /* ... (no changes) ... */
+            console.log("Switching to Deck Builder...");
+            stopGameTimers();
+            hideMessage();
+            if (deckBuilderScreen) deckBuilderScreen.classList.add('active');
+            if (battleScreen) battleScreen.classList.remove('active');
+            renderSelectedDeck();
+        }
+        function switchToBattle() { /* ... (no changes) ... */
+            if (selectedDeck.length !== DECK_SIZE) {
+                console.warn("Cannot start battle: Deck not full.");
+                alert(`Please select exactly ${DECK_SIZE} cards for your deck!`);
+                return;
+            }
+            console.log("Switching to Battle Screen...");
+            if (deckBuilderScreen) deckBuilderScreen.classList.remove('active');
+            if (battleScreen) battleScreen.classList.add('active');
+            initializeGame();
+        }
+
+
+        // --- Event Listeners ---
+        // Setup listeners after populating controls
+        function setupDeployButtonListeners() {
+            const buttons = battleControlsContainer ? battleControlsContainer.querySelectorAll('.deploy-button') : [];
+            buttons.forEach(button => {
+                 const newButton = button.cloneNode(true); // Clone to ensure clean listeners
+                 button.parentNode.replaceChild(newButton, button);
+                 const cardId = newButton.dataset.id;
+                 const card = getCardById(cardId);
+                 if (card && card.implemented) {
+                     newButton.addEventListener('click', () => {
+                         // --- Elixir Check and Deduction Corrected HERE ---
+                         if (!gameOver && !isTiebreakerActive && !isTargetingSpell && card.implemented && playerElixir >= card.cost) {
+                             console.log(`Attempting Deploy: ${cardId}. Elixir=${playerElixir}, Cost=${card.cost}`);
+                             playerElixir -= card.cost; // Deduct elixir
+                             console.log(`Elixir After Deploy: ${playerElixir}`);
+                             updateDisplays(); // Update UI immediately
+                             updateBattleButtons(); // Update button states immediately
+                             handleDeployAction(cardId); // Call action handler
+                         } else {
+                             console.log(`Cannot deploy ${cardId}. Elixir: ${playerElixir}, Cost: ${card?.cost}, Implemented: ${card?.implemented}, Game Over: ${gameOver}, Tiebreaker: ${isTiebreakerActive}, Targeting: ${isTargetingSpell}`);
+                         }
+                     });
+                 } else { newButton.disabled = true; }
+            });
+        }
+        if (startBattleButton) startBattleButton.addEventListener('click', switchToBattle);
+        if (resetButton) resetButton.addEventListener('click', switchToDeckBuilder);
+
+        // --- Initial Setup on Load ---
+        window.onload = () => { /* ... (no changes) ... */
+             console.log("Window loaded. Setting up Deck Builder.");
+             if (!deckBuilderScreen || !battleScreen || !cardLibraryContainer || !selectedDeckContainer || !canvas || !ctx || !startBattleButton || !resetButton || !gameTimerDisplay || !playerElixirDisplaySpan || !playerElixirBarFill) { // Added check for new elixir elements
+                 console.error("Essential DOM elements not found! Aborting setup.");
+                 document.body.innerHTML = '<h1 style="color:red; text-align: center;">Error loading game elements. Please refresh the page.</h1>';
+                 return;
+             }
+             try {
+                 renderCardLibrary();
+                 renderSelectedDeck();
+                 deckBuilderScreen.classList.add('active');
+                 battleScreen.classList.remove('active');
+                 console.log("Deck Builder setup complete.");
+             } catch (error) {
+                  console.error("Error during initial setup:", error);
+                  document.body.innerHTML = '<h1 style="color:red; text-align: center;">An error occurred during setup. Please refresh.</h1>';
+             }
+        };
+
+        // Override populateBattleControls
+        const originalPopulateBattleControls = populateBattleControls;
+        populateBattleControls = () => {
+            originalPopulateBattleControls();
+            setTimeout(setupDeployButtonListeners, 0); // Use setTimeout for safety
+        };
+
+    </script>
+
+</body>
+</html>
