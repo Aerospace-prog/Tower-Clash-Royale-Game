@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Tower Clash - Elixir Bar</title> <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <title>Simple Tower Clash - Enhanced Attack FX</title> <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
-        /* CSS - Added styles for Elixir Bar */
+        /* CSS remains the same */
         :root {
             --primary-bg: #1e2a3a; --secondary-bg: #2c3e50; --tertiary-bg: #3b5970;
             --accent-blue: #3498db; --accent-red: #e74c3c; --accent-green: #2ecc71;
@@ -87,46 +87,14 @@
         #player-stats { border-left: 5px solid var(--accent-blue); }
         #enemy-stats { border-right: 5px solid var(--accent-red); }
         #game-timer-container { border-bottom: 5px solid var(--accent-yellow); flex-basis: 100px; padding: 10px 5px; }
-        #player-elixir-display, #player-tower-hp, #enemy-tower-hp, #gameTimerDisplay { display: block; margin-top: 8px; font-weight: bold; text-shadow: 1px 1px 1px #000; }
+        #player-tower-hp, #enemy-tower-hp, #gameTimerDisplay { display: block; margin-top: 8px; font-weight: bold; text-shadow: 1px 1px 1px #000; }
         #player-tower-hp, #enemy-tower-hp { font-size: 1.0em; }
         #gameTimerDisplay { color: var(--accent-yellow); font-size: 1.4em; }
-
-        /* --- Elixir Bar Styles --- */
-        #player-elixir-display {
-            /* Container for text and bar */
-            background-color: transparent; /* Remove background from span */
-            padding: 0;
-            display: block; /* Make it block to contain children */
-            margin-top: 10px;
-        }
-        .elixir-text {
-            display: block; /* Text on its own line */
-            font-size: 1.0em; /* Adjust text size */
-            margin-bottom: 4px;
-             color: var(--text-light); /* Ensure text is visible */
-             text-shadow: 1px 1px 1px #000;
-        }
-        .elixir-bar-container {
-            width: 100%; /* Full width of its container */
-            max-width: 120px; /* Max width of the bar */
-            height: 12px; /* Height of the bar */
-            background-color: rgba(0, 0, 0, 0.4); /* Dark background */
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            overflow: hidden; /* Keep fill inside */
-            margin: 0 auto; /* Center the bar */
-        }
-        .elixir-bar-fill {
-            height: 100%;
-            width: 0%; /* Start empty, width controlled by JS */
-            background-color: var(--elixir-color); /* Purple fill */
-            border-radius: 3px; /* Slightly rounded inner fill */
-            transition: width 0.2s ease-out; /* Smooth transition */
-            box-shadow: inset 0 0 3px rgba(255,255,255,0.3); /* Inner highlight */
-        }
-        /* --- End Elixir Bar Styles --- */
-
-
+        /* Elixir Bar Styles */
+        #player-elixir-display { background-color: transparent; padding: 0; display: block; margin-top: 10px; }
+        .elixir-text { display: block; font-size: 1.0em; margin-bottom: 4px; color: var(--text-light); text-shadow: 1px 1px 1px #000; }
+        .elixir-bar-container { width: 100%; max-width: 120px; height: 12px; background-color: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden; margin: 0 auto; }
+        .elixir-bar-fill { height: 100%; width: 0%; background-color: var(--elixir-color); border-radius: 3px; transition: width 0.2s ease-out; box-shadow: inset 0 0 3px rgba(255,255,255,0.3); }
         #gameCanvas { display: block; background-color: #aaa; background-image: var(--canvas-gradient); border: 4px solid var(--text-dark); margin: 0 auto 20px auto; max-width: 100%; height: auto; border-radius: 8px; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); cursor: default; }
         #targetingIndicator { position: absolute; border: 3px dashed var(--accent-red); border-radius: 50%; background-color: rgba(231, 76, 60, 0.2); pointer-events: none; display: none; box-sizing: border-box; z-index: 5; }
         #battleControls { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 15px; padding: 10px; background-color: var(--tertiary-bg); border-radius: 8px; min-height: 95px; border: 2px solid rgba(0,0,0,0.3); }
@@ -169,15 +137,12 @@
     <div id="battleScreen" class="screen">
         <h1>Battle!</h1>
         <div class="game-info">
-            <div id="player-stats"> Player
-                 <span id="player-tower-hp">King HP: 1000</span>
+            <div id="player-stats"> Player <span id="player-tower-hp">King HP: 1000</span>
                  <span id="player-elixir-display">
                      <span class="elixir-text">Elixir: 3 / 10</span>
-                     <div class="elixir-bar-container">
-                         <div class="elixir-bar-fill"></div>
-                     </div>
+                     <div class="elixir-bar-container"> <div class="elixir-bar-fill"></div> </div>
                  </span>
-                 </div>
+            </div>
             <div id="game-timer-container"> Time Left <span id="gameTimerDisplay">3:00</span> </div>
             <div id="enemy-stats"> Enemy <span id="enemy-tower-hp">King HP: 1000</span> </div>
         </div>
@@ -201,8 +166,8 @@
         const startBattleButton = document.getElementById('startBattleButton');
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas ? canvas.getContext('2d') : null;
-        const playerElixirDisplaySpan = document.querySelector('#player-elixir-display .elixir-text'); // Get text span
-        const playerElixirBarFill = document.querySelector('#player-elixir-display .elixir-bar-fill'); // Get bar fill div
+        const playerElixirDisplaySpan = document.querySelector('#player-elixir-display .elixir-text');
+        const playerElixirBarFill = document.querySelector('#player-elixir-display .elixir-bar-fill');
         const playerTowerHpDisplay = document.getElementById('player-tower-hp');
         const enemyTowerHpDisplay = document.getElementById('enemy-tower-hp');
         const battleControlsContainer = document.getElementById('battleControls');
@@ -263,6 +228,7 @@
         let projectiles = [];
         let playerTowers = [];
         let enemyTowers = [];
+        let attackEffects = []; // <-- Added for attack animations
         let elixirIntervalId = null;
         let aiIntervalId = null;
         let animationFrameId = null;
@@ -292,7 +258,7 @@
         function distance(x1, y1, x2, y2) { return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2)); }
 
         // --- Drawing ---
-        function drawTower(tower) { /* ... (no changes) ... */
+        function drawTower(tower) { /* ... (no changes needed from previous version) ... */
              if (!ctx || !tower) return;
              if (tower.hp > 0) {
                  const heightModifier = tower.isKingTower ? 1 : 0.8; const widthModifier = tower.isKingTower ? 1 : 0.9;
@@ -343,6 +309,38 @@
             r = Math.min(255, r + (255 * percent / 100)); g = Math.min(255, g + (255 * percent / 100)); b = Math.min(255, b + (255 * percent / 100));
             return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
         }
+        // --- Modified function to draw attack effects ---
+        function drawAttackEffects() {
+            if (!ctx) return;
+            attackEffects.forEach(effect => {
+                const alpha = 1 - (Date.now() - effect.startTime) / effect.duration; // Fade out effect
+                if (alpha <= 0) return; // Skip if faded
+
+                if (effect.type === 'slash') {
+                    // --- Enhanced Slash ---
+                    ctx.strokeStyle = `rgba(0, 255, 255, ${alpha * 0.9})`; // Bright Cyan
+                    ctx.lineWidth = 3; // Slightly thicker
+                    // Add glow
+                    ctx.shadowColor = 'rgba(0, 255, 255, 0.7)';
+                    ctx.shadowBlur = 5;
+                    // Draw line
+                    ctx.beginPath();
+                    ctx.moveTo(effect.x1, effect.y1);
+                    ctx.lineTo(effect.x2, effect.y2);
+                    ctx.stroke();
+                    // Reset shadow
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                    // --- End Enhanced Slash ---
+                } else if (effect.type === 'flash') {
+                    ctx.fillStyle = `rgba(255, 255, 150, ${alpha * 0.7})`; // Yellowish flash
+                    ctx.beginPath();
+                    ctx.arc(effect.x, effect.y, effect.radius * (1 + (1-alpha)*0.5), 0, Math.PI * 2); // Effect expands slightly then fades
+                    ctx.fill();
+                }
+            });
+        }
+
 
         // --- Deck Building ---
         function renderCardLibrary() { /* ... (no changes) ... */
@@ -518,7 +516,7 @@
              }
          }
 
-        // --- Targeting, Movement, Attack Logic ---
+        // --- Targeting, Movement, Attack Logic (Added Attack Effects) ---
         function findTarget(unit, potentialEnemyUnits, potentialEnemyTowers) { /* ... (no changes) ... */
              let closestTarget = null; let minDistance = Infinity;
              if (!unit || !unit.stats) return null; const unitRange = unit.stats.range;
@@ -546,7 +544,8 @@
                  if (d < minDistance) { minDistance = d; closestTarget = target; }
              }); return closestTarget;
          }
-        function updateUnits(units, enemyUnitsList, enemyTowersList) { /* ... (no changes) ... */
+        // --- Modified updateUnits to add attack effects ---
+        function updateUnits(units, enemyUnitsList, enemyTowersList) { /* ... (no changes needed from previous version) ... */
             if (isTiebreakerActive) return;
             const currentTime = Date.now();
             for (let i = units.length - 1; i >= 0; i--) {
@@ -562,8 +561,15 @@
                     if (distToTarget <= unit.stats.range) {
                         isAttacking = true;
                         if (currentTime - unit.lastAttackTime >= unit.stats.attackSpeed) {
-                             if (unit.stats.range > 30) { projectiles.push({ x: unit.x, y: unit.y, target: unit.target, speed: 5, damage: unit.stats.damage, color: unit.color, size: 5, isPlayerProjectile: unit.isPlayer }); }
-                              else { unit.target.hp -= unit.stats.damage; }
+                             if (unit.stats.range > 30) { // Ranged Attack
+                                 projectiles.push({ x: unit.x, y: unit.y, target: unit.target, speed: 5, damage: unit.stats.damage, color: unit.color, size: 5, isPlayerProjectile: unit.isPlayer });
+                                 attackEffects.push({ type: 'flash', x: unit.x, y: unit.y, radius: unit.stats.size / 3, duration: 100, startTime: currentTime });
+                             } else { // Melee Attack
+                                 unit.target.hp -= unit.stats.damage;
+                                 const angleToTarget = Math.atan2(targetCenterY - unit.y, targetCenterX - unit.x);
+                                 const slashLength = unit.stats.size * 0.8;
+                                 attackEffects.push({ type: 'slash', x1: unit.x + Math.cos(angleToTarget - Math.PI / 6) * unit.stats.size * 0.4, y1: unit.y + Math.sin(angleToTarget - Math.PI / 6) * unit.stats.size * 0.4, x2: unit.x + Math.cos(angleToTarget + Math.PI / 6) * slashLength, y2: unit.y + Math.sin(angleToTarget + Math.PI / 6) * slashLength, duration: 150, startTime: currentTime });
+                             }
                              unit.lastAttackTime = currentTime;
                              if (unit.target.hp <= 0) { unit.target = null; isAttacking = false; }
                         }
@@ -572,7 +578,8 @@
                  if (!isAttacking) { const direction = unit.isPlayer ? 1 : -1; unit.x += unit.stats.speed * direction; }
             }
         }
-         function updateTowers(towers, enemyUnitsList) { /* ... (no changes) ... */
+        // --- Modified updateTowers to add attack effects ---
+         function updateTowers(towers, enemyUnitsList) { /* ... (no changes needed from previous version) ... */
              if (isTiebreakerActive) return;
              const currentTime = Date.now();
              towers.forEach(tower => {
@@ -582,6 +589,7 @@
                          const projectileStartX = tower.x + tower.width / 2 + (tower.isPlayer ? 10 : -10);
                          projectiles.push({ x: projectileStartX, y: tower.y, target: target, speed: 6, damage: tower.damage, color: tower.color, size: 6, isPlayerProjectile: tower.color === playerTowers[1].color });
                          tower.lastAttackTime = currentTime;
+                         attackEffects.push({ type: 'flash', x: projectileStartX, y: tower.y, radius: 4, duration: 100, startTime: currentTime });
                      }
                  }
              });
@@ -603,6 +611,10 @@
          function cleanupDeadUnits() { /* ... (no changes) ... */
              playerUnits = playerUnits.filter(unit => unit && unit.hp > 0);
              enemyUnits = enemyUnits.filter(unit => unit && unit.hp > 0);
+         }
+         // --- Added function to update attack effects ---
+         function updateAttackEffects(currentTime) {
+             attackEffects = attackEffects.filter(effect => currentTime - effect.startTime <= effect.duration);
          }
         function simpleAI() { /* ... (no changes) ... */
              if (gameOver || isTiebreakerActive) return;
@@ -642,7 +654,7 @@
              clearInterval(elixirIntervalId); elixirIntervalId = null;
              clearInterval(aiIntervalId); aiIntervalId = null;
              clearInterval(gameTimerIntervalId); gameTimerIntervalId = null;
-             playerUnits = []; enemyUnits = []; projectiles = [];
+             playerUnits = []; enemyUnits = []; projectiles = []; attackEffects = []; // Clear effects too
              updateBattleButtons();
              showMessage("TIEBREAKER!"); setTimeout(hideMessage, 2000);
              if (tiebreakerIntervalId) clearInterval(tiebreakerIntervalId);
@@ -657,7 +669,7 @@
              checkGameOver();
          }
 
-         // --- stopGameTimers (Includes spell state reset) ---
+         // --- stopGameTimers ---
         function stopGameTimers() { /* ... (no changes) ... */
              clearInterval(elixirIntervalId); elixirIntervalId = null;
              clearInterval(aiIntervalId); aiIntervalId = null;
@@ -688,20 +700,16 @@
         }
 
         // --- Displays and Buttons ---
-        // --- Modified updateDisplays to include Elixir Bar ---
-        function updateDisplays() {
+        function updateDisplays() { /* ... (no changes) ... */
             if (!playerElixirDisplaySpan || !playerTowerHpDisplay || !enemyTowerHpDisplay || !playerElixirBarFill) return;
-            // Update Text
             playerElixirDisplaySpan.textContent = `Elixir: ${playerElixir} / ${MAX_ELIXIR}`;
             const playerKingHp = playerTowers[1] ? Math.max(0, Math.round(playerTowers[1].hp)) : 'N/A';
             const enemyKingHp = enemyTowers[1] ? Math.max(0, Math.round(enemyTowers[1].hp)) : 'N/A';
             playerTowerHpDisplay.textContent = `King HP: ${playerKingHp}/${KING_TOWER_HP}`;
             enemyTowerHpDisplay.textContent = `King HP: ${enemyKingHp}/${KING_TOWER_HP}`;
-            // Update Bar
             const elixirPercentage = (playerElixir / MAX_ELIXIR) * 100;
             playerElixirBarFill.style.width = `${elixirPercentage}%`;
         }
-         // Update buttons (Includes spell targeting check)
          function updateBattleButtons() { /* ... (no changes) ... */
              const buttons = battleControlsContainer ? battleControlsContainer.querySelectorAll('.deploy-button') : [];
              buttons.forEach(button => {
@@ -714,18 +722,22 @@
         function showMessage(text) { if(messageBox) { messageBox.textContent = text; messageBox.style.display = 'block'; } }
         function hideMessage() { if(messageBox) messageBox.style.display = 'none'; }
 
-        // --- Game Loop ---
-        function gameLoop() { /* ... (no changes) ... */
+        // --- Game Loop (Modified) ---
+        function gameLoop() {
             if (gameOver) { animationFrameId = null; return; }
             const currentTime = Date.now();
             if (!ctx) { console.error("Canvas context lost during loop!"); stopGameTimers(); return; }
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             try {
                 if (!isTiebreakerActive) {
-                    updateProjectiles(); updateUnits(playerUnits, enemyUnits, enemyTowers); updateUnits(enemyUnits, playerUnits, playerTowers);
-                    updateTowers(playerTowers, enemyUnits); updateTowers(enemyTowers, playerUnits);
+                    updateProjectiles();
+                    updateUnits(playerUnits, enemyUnits, enemyTowers);
+                    updateUnits(enemyUnits, playerUnits, playerTowers);
+                    updateTowers(playerTowers, enemyUnits);
+                    updateTowers(enemyTowers, playerUnits);
                     cleanupDeadUnits();
                 }
+                updateAttackEffects(currentTime); // <-- Update effects (remove expired ones)
                 updateDisplays();
             } catch (error) { console.error("Error during game update:", error); stopGameTimers(); showMessage("An error occurred!"); return; }
             try {
@@ -734,20 +746,31 @@
                     playerUnits.forEach(drawUnit); enemyUnits.forEach(drawUnit);
                     projectiles.forEach(drawProjectile);
                 } else {
+                    // Draw Tiebreaker HP Drain Animation
                     tiebreakerEffectCounter++;
-                    if (tiebreakerEffectCounter % 30 < 15) {
+                    if (tiebreakerEffectCounter % 30 < 15) { // Flash approx every half second
                          [playerTowers[1], enemyTowers[1]].forEach(kingTower => {
                              if (kingTower && kingTower.hp > 0) {
-                                 ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+                                 // Overlay
+                                 ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
                                  ctx.fillRect(kingTower.x, kingTower.y - kingTower.height / 2, kingTower.width, kingTower.height);
-                                 for(let i=0; i<3; i++) {
-                                     ctx.fillStyle = `rgba(255, ${Math.random()*155 + 100}, 0, 0.8)`;
-                                     ctx.beginPath(); ctx.arc(kingTower.x + Math.random() * kingTower.width, kingTower.y + (Math.random() - 0.5) * kingTower.height, Math.random() * 3 + 1, 0, Math.PI*2); ctx.fill();
+                                 // Sparks
+                                 for(let i=0; i<2; i++) {
+                                     ctx.fillStyle = `rgba(255, ${Math.random()*100 + 155}, 0, 0.9)`; // Brighter Orange/Red sparks
+                                     ctx.beginPath();
+                                     ctx.arc(
+                                         kingTower.x + Math.random() * kingTower.width, // Random x within tower
+                                         kingTower.y + (Math.random() - 0.5) * kingTower.height, // Random y within tower
+                                         Math.random() * 2 + 2, // Spark size
+                                         0, Math.PI*2
+                                     );
+                                     ctx.fill();
                                  }
                              }
                          });
                     }
                 }
+                drawAttackEffects(); // <-- Draw active attack effects
             } catch (error) { console.error("Error during game drawing:", error); stopGameTimers(); showMessage("An error occurred during drawing!"); return; }
              if (!isTiebreakerActive) { checkGameOver(false); }
             if (!gameOver) { animationFrameId = requestAnimationFrame(gameLoop); }
@@ -755,10 +778,10 @@
         }
 
         // --- Initialization ---
-        function initializeGame() { // Called by switchToBattle
+        function initializeGame() {
              console.log("Initializing Battle...");
              gameOver = false; playerElixir = 3; aiElixir = AI_STARTING_ELIXIR;
-             playerUnits = []; enemyUnits = []; projectiles = [];
+             playerUnits = []; enemyUnits = []; projectiles = []; attackEffects = []; // <-- Reset attack effects
              playerTowers = createTowers(true); enemyTowers = createTowers(false);
              gameTimeRemaining = BATTLE_DURATION_SECONDS;
              isTiebreakerActive = false; tiebreakerEffectCounter = 0;
@@ -805,29 +828,24 @@
             initializeGame();
         }
 
-
         // --- Event Listeners ---
         // Setup listeners after populating controls
-        function setupDeployButtonListeners() {
+        function setupDeployButtonListeners() { /* ... (no changes needed from previous fix) ... */
             const buttons = battleControlsContainer ? battleControlsContainer.querySelectorAll('.deploy-button') : [];
             buttons.forEach(button => {
-                 const newButton = button.cloneNode(true); // Clone to ensure clean listeners
+                 const newButton = button.cloneNode(true);
                  button.parentNode.replaceChild(newButton, button);
                  const cardId = newButton.dataset.id;
                  const card = getCardById(cardId);
                  if (card && card.implemented) {
                      newButton.addEventListener('click', () => {
-                         // --- Elixir Check and Deduction Corrected HERE ---
                          if (!gameOver && !isTiebreakerActive && !isTargetingSpell && card.implemented && playerElixir >= card.cost) {
                              console.log(`Attempting Deploy: ${cardId}. Elixir=${playerElixir}, Cost=${card.cost}`);
-                             playerElixir -= card.cost; // Deduct elixir
+                             playerElixir -= card.cost;
                              console.log(`Elixir After Deploy: ${playerElixir}`);
-                             updateDisplays(); // Update UI immediately
-                             updateBattleButtons(); // Update button states immediately
-                             handleDeployAction(cardId); // Call action handler
-                         } else {
-                             console.log(`Cannot deploy ${cardId}. Elixir: ${playerElixir}, Cost: ${card?.cost}, Implemented: ${card?.implemented}, Game Over: ${gameOver}, Tiebreaker: ${isTiebreakerActive}, Targeting: ${isTargetingSpell}`);
-                         }
+                             updateDisplays(); updateBattleButtons();
+                             handleDeployAction(cardId);
+                         } else { console.log(`Cannot deploy ${cardId}. Elixir: ${playerElixir}, Cost: ${card?.cost}, Implemented: ${card?.implemented}, Game Over: ${gameOver}, Tiebreaker: ${isTiebreakerActive}, Targeting: ${isTargetingSpell}`); }
                      });
                  } else { newButton.disabled = true; }
             });
@@ -838,7 +856,7 @@
         // --- Initial Setup on Load ---
         window.onload = () => { /* ... (no changes) ... */
              console.log("Window loaded. Setting up Deck Builder.");
-             if (!deckBuilderScreen || !battleScreen || !cardLibraryContainer || !selectedDeckContainer || !canvas || !ctx || !startBattleButton || !resetButton || !gameTimerDisplay || !playerElixirDisplaySpan || !playerElixirBarFill) { // Added check for new elixir elements
+             if (!deckBuilderScreen || !battleScreen || !cardLibraryContainer || !selectedDeckContainer || !canvas || !ctx || !startBattleButton || !resetButton || !gameTimerDisplay || !playerElixirDisplaySpan || !playerElixirBarFill) {
                  console.error("Essential DOM elements not found! Aborting setup.");
                  document.body.innerHTML = '<h1 style="color:red; text-align: center;">Error loading game elements. Please refresh the page.</h1>';
                  return;
@@ -859,7 +877,7 @@
         const originalPopulateBattleControls = populateBattleControls;
         populateBattleControls = () => {
             originalPopulateBattleControls();
-            setTimeout(setupDeployButtonListeners, 0); // Use setTimeout for safety
+            setTimeout(setupDeployButtonListeners, 0);
         };
 
     </script>
