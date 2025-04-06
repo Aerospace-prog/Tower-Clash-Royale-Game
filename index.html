@@ -197,6 +197,9 @@
         const PLACEMENT_TILE_SIZE = 30; // For building placement checks
         const PLAYER_SIDE_X_LIMIT = 400; // Midpoint of 800 width canvas
         const ATTACK_ANIMATION_DURATION = 150; // ms for attack visual
+        const DEATH_ANIMATION_DURATION = 300; // ms for death fade out
+        const WALK_ANIMATION_INTERVAL = 15; // Toggle walk frame every N game loop frames
+
 
         // --- Card Library with imageUrl ---
         const PLACEHOLDER_URL_BASE = "https://placehold.co/60x80/4a6883/ecf0f1?text=";
@@ -281,6 +284,7 @@
         let currentSpellType = null;
         let isPlacingBuilding = false;
         let currentBuildingType = null;
+        let gameFrameCounter = 0; // Added for walk animation timing
 
         // --- Tower Initialization ---
         function createTowers(isPlayer) {
@@ -354,199 +358,97 @@
             const x = unit.x;
             const y = unit.y;
             const color = unit.color;
+            const currentTime = Date.now();
 
-            ctx.save(); // Save context for potential transformations or color changes
-            ctx.translate(x, y); // Move origin to unit center for easier drawing
+            ctx.save(); // Save context
 
-            // --- Specific Drawing Logic per Unit Type ---
-            switch (unit.type) {
-                case 'knight':
-                    // Body (rectangle)
-                    ctx.fillStyle = color;
-                    ctx.fillRect(-halfSize * 0.6, -halfSize * 0.8, size * 1.2, size * 1.6);
-                    // Head (circle)
-                    ctx.fillStyle = lightenColor(color, 20); // Lighter color for helmet
-                    ctx.beginPath();
-                    ctx.arc(0, -halfSize * 0.9, halfSize * 0.5, 0, Math.PI * 2);
-                    ctx.fill();
-                    // Sword (line) - changes position when attacking
-                    ctx.strokeStyle = '#FFFFFF'; // White sword
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.moveTo(halfSize * 0.5, -halfSize * 0.2); // Hilt position
-                    if (unit.isAttacking) {
-                        ctx.lineTo(halfSize * 1.5, -halfSize * 0.8); // Attacking pose (angled up)
-                    } else {
-                        ctx.lineTo(halfSize * 1.2, halfSize * 0.8); // Idle pose (down)
-                    }
-                    ctx.stroke();
-                    break;
+            // --- Handle Death Animation (Fade Out) ---
+            let alpha = 1.0;
+            if (unit.isDying) {
+                const timeRemaining = unit.deathAnimationEndTime - currentTime;
+                if (timeRemaining <= 0) {
+                    alpha = 0; // Completely faded - will be removed by gameLoop cleanup
+                } else {
+                    alpha = Math.max(0, timeRemaining / DEATH_ANIMATION_DURATION); // Calculate fade alpha
+                }
+                ctx.globalAlpha = alpha;
+            }
+            // --- End Death Animation ---
 
-                case 'archer':
-                    // Body (rectangle)
-                    ctx.fillStyle = color; // Green
-                    ctx.fillRect(-halfSize * 0.5, -halfSize * 0.7, size, size * 1.4);
-                    // Head (circle)
-                    ctx.fillStyle = lightenColor(color, 30);
-                    ctx.beginPath();
-                    ctx.arc(0, -halfSize * 0.8, halfSize * 0.4, 0, Math.PI * 2);
-                    ctx.fill();
-                    // Bow (arc)
-                    ctx.strokeStyle = '#8B4513'; // Brown bow
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(halfSize * 0.3, 0, halfSize * 0.8, Math.PI * 0.6, Math.PI * 1.4);
-                    ctx.stroke();
-                    // Attack Animation (Arrow flash)
-                    if (unit.isAttacking) {
-                        ctx.fillStyle = 'yellow';
-                        ctx.beginPath();
-                        ctx.moveTo(halfSize * 0.5, 0);
-                        ctx.lineTo(halfSize * 1.5, 0); // Simple line for arrow
-                        ctx.lineTo(halfSize * 1.3, -2);
-                        ctx.moveTo(halfSize * 1.5, 0);
-                        ctx.lineTo(halfSize * 1.3, 2);
-                        ctx.fill();
-                    }
-                    break;
+            if (alpha > 0) { // Only draw if not fully faded
+                ctx.translate(x, y); // Move origin to unit center
 
-                 case 'skeletons':
-                    // Simple representation: circle head, line body
-                    ctx.fillStyle = color; // White/Gray
-                    ctx.beginPath();
-                    ctx.arc(0, -halfSize * 0.5, halfSize * 0.4, 0, Math.PI * 2); // Head
-                    ctx.fill();
-                    ctx.fillRect(-1, -halfSize * 0.2, 2, size * 0.8); // Body
-                    // Attack Animation (Maybe flash color?)
-                    if (unit.isAttacking) {
-                        ctx.fillStyle = 'rgba(255, 0, 0, 0.5)'; // Red flash
-                        ctx.fill(); // Redraw body with flash
-                    }
-                    break;
+                // Determine if walking animation should apply (simple leg shift example)
+                // Only apply walk offset if unit is actually moving AND not attacking (prioritize attack visual)
+                const walkOffset = (unit.isMoving && !unit.isAttacking && unit.walkFrame === 1) ? 2 : 0;
 
-                 case 'bats':
-                     // Diamond shape for body, triangle wings
-                     ctx.fillStyle = color; // Purple
-                     // Body
-                     ctx.beginPath();
-                     ctx.moveTo(0, -halfSize * 0.6);
-                     ctx.lineTo(halfSize * 0.5, 0);
-                     ctx.lineTo(0, halfSize * 0.6);
-                     ctx.lineTo(-halfSize * 0.5, 0);
-                     ctx.closePath();
-                     ctx.fill();
-                     // Wings
-                     ctx.beginPath();
-                     ctx.moveTo(-halfSize * 0.4, -halfSize * 0.1);
-                     ctx.lineTo(-halfSize * 1.2, -halfSize * 0.5);
-                     ctx.lineTo(-halfSize * 1.0, halfSize * 0.2);
-                     ctx.closePath();
-                     ctx.fill();
-                     ctx.beginPath();
-                     ctx.moveTo(halfSize * 0.4, -halfSize * 0.1);
-                     ctx.lineTo(halfSize * 1.2, -halfSize * 0.5);
-                     ctx.lineTo(halfSize * 1.0, halfSize * 0.2);
-                     ctx.closePath();
-                     ctx.fill();
-                     // Attack Animation (Flash)
-                     if (unit.isAttacking) {
-                        ctx.fillStyle = 'rgba(255, 255, 0, 0.6)'; // Yellow flash
-                        ctx.beginPath();
-                        ctx.arc(0, 0, halfSize * 0.5, 0, Math.PI * 2);
-                        ctx.fill();
-                     }
-                     break;
-
-                case 'hogrider':
-                    // Hog body (rectangle)
-                    ctx.fillStyle = '#A9A9A9'; // Grey hog
-                    ctx.fillRect(-halfSize * 0.8, 0, size * 1.6, size * 0.8);
-                    // Rider body (smaller rectangle on top)
-                    ctx.fillStyle = color; // Orange rider
-                    ctx.fillRect(-halfSize * 0.4, -halfSize * 1.2, size * 0.8, size * 1.2);
-                    // Rider head
-                    ctx.fillStyle = lightenColor(color, 20);
-                    ctx.beginPath();
-                    ctx.arc(0, -halfSize * 1.3, halfSize * 0.3, 0, Math.PI * 2);
-                    ctx.fill();
-                    // Hammer (line) - changes angle when attacking
-                    ctx.strokeStyle = '#696969'; // Dark grey hammer handle
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    ctx.moveTo(halfSize * 0.3, -halfSize * 0.5);
-                    if (unit.isAttacking) {
-                        ctx.lineTo(halfSize * 1.0, halfSize * 1.0); // Attacking pose (swing down)
-                        // Hammer head
-                        ctx.fillStyle = '#808080';
-                        ctx.fillRect(halfSize*0.8, halfSize*0.8, halfSize*0.5, halfSize*0.5);
-                    } else {
-                        ctx.lineTo(halfSize * 0.8, -halfSize * 1.0); // Idle pose (raised)
-                         // Hammer head
-                        ctx.fillStyle = '#808080';
-                        ctx.fillRect(halfSize*0.6, -halfSize*1.2, halfSize*0.5, halfSize*0.5);
-                    }
-                    ctx.stroke();
-                    break;
-
-                // Add cases for other implemented units (melee, tank, assassin)
-                // using similar drawing logic (rectangles, circles, lines)
-
-                case 'melee': // Mini Pekka
-                    ctx.fillStyle = color; // Blue
-                    ctx.fillRect(-halfSize * 0.7, -halfSize * 0.9, size * 1.4, size * 1.8); // Body
-                    // Horns
-                    ctx.fillStyle = lightenColor(color, 30);
-                    ctx.beginPath(); ctx.moveTo(-halfSize*0.3, -halfSize*0.9); ctx.lineTo(-halfSize*0.5, -halfSize*1.3); ctx.lineTo(-halfSize*0.1, -halfSize*1.1); ctx.fill();
-                    ctx.beginPath(); ctx.moveTo(halfSize*0.3, -halfSize*0.9); ctx.lineTo(halfSize*0.5, -halfSize*1.3); ctx.lineTo(halfSize*0.1, -halfSize*1.1); ctx.fill();
-                    // Sword
-                    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(halfSize * 0.6, -halfSize * 0.2);
-                    if (unit.isAttacking) { ctx.lineTo(halfSize * 1.6, -halfSize * 0.2); } // Attack pose (forward)
-                    else { ctx.lineTo(halfSize * 1.3, halfSize * 0.9); } // Idle pose (down)
-                    ctx.stroke();
-                    break;
-
-                case 'tank': // Giant
-                    ctx.fillStyle = color; // Grey
-                    ctx.fillRect(-halfSize, -halfSize, size, size); // Large square
-                    // Fists (circles) - move forward when attacking
-                    ctx.fillStyle = lightenColor(color, 10);
-                    const fistOffset = unit.isAttacking ? halfSize * 0.6 : halfSize * 0.4;
-                    ctx.beginPath(); ctx.arc(fistOffset, halfSize * 0.3, halfSize * 0.3, 0, Math.PI * 2); ctx.fill();
-                    ctx.beginPath(); ctx.arc(fistOffset, -halfSize * 0.3, halfSize * 0.3, 0, Math.PI * 2); ctx.fill();
-                    break;
-
-                case 'assassin': // Bandit
-                     // Diamond shape
-                     ctx.fillStyle = color; // Purple
-                     ctx.beginPath();
-                     ctx.moveTo(0, -halfSize); ctx.lineTo(halfSize, 0); ctx.lineTo(0, halfSize); ctx.lineTo(-halfSize, 0);
-                     ctx.closePath(); ctx.fill();
-                     // Mask/Eyes?
-                     ctx.fillStyle = lightenColor(color, 30);
-                     ctx.fillRect(-halfSize*0.3, -halfSize*0.4, halfSize*0.6, halfSize*0.3);
-                     // Attack flash
-                     if (unit.isAttacking) {
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; // White flash
-                        ctx.beginPath(); ctx.arc(halfSize * 0.8, 0, halfSize * 0.4, 0, Math.PI * 2); ctx.fill();
-                     }
-                     break;
-
-                default: // Fallback to original shape if type not recognized
-                    const shape = unit.stats.shape || 'square';
-                    ctx.fillStyle = color;
-                    ctx.beginPath();
-                    switch (shape) {
-                        case 'circle': ctx.arc(0, 0, halfSize, 0, Math.PI * 2); ctx.fill(); break;
-                        case 'diamond': ctx.moveTo(0, -halfSize); ctx.lineTo(halfSize, 0); ctx.lineTo(0, halfSize); ctx.lineTo(-halfSize, 0); ctx.closePath(); ctx.fill(); break;
-                        case 'square': default: ctx.fillRect(-halfSize, -halfSize, size, size); break;
-                    }
-                    break;
+                // --- Specific Drawing Logic per Unit Type ---
+                switch (unit.type) {
+                    case 'knight':
+                        ctx.fillStyle = color; ctx.fillRect(-halfSize * 0.6 + walkOffset, -halfSize * 0.8, size * 1.2, size * 1.6); // Body shifts slightly
+                        ctx.fillStyle = lightenColor(color, 20); ctx.beginPath(); ctx.arc(0 + walkOffset, -halfSize * 0.9, halfSize * 0.5, 0, Math.PI * 2); ctx.fill(); // Head shifts
+                        ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(halfSize * 0.5 + walkOffset, -halfSize * 0.2);
+                        if (unit.isAttacking) { ctx.lineTo(halfSize * 1.5 + walkOffset, -halfSize * 0.8); } // Attacking pose
+                        else { ctx.lineTo(halfSize * 1.2 + walkOffset, halfSize * 0.8); } // Idle/Walk pose
+                        ctx.stroke(); // Sword
+                        break;
+                    case 'archer':
+                        ctx.fillStyle = color; ctx.fillRect(-halfSize * 0.5 + walkOffset, -halfSize * 0.7, size, size * 1.4); // Body
+                        ctx.fillStyle = lightenColor(color, 30); ctx.beginPath(); ctx.arc(0 + walkOffset, -halfSize * 0.8, halfSize * 0.4, 0, Math.PI * 2); ctx.fill(); // Head
+                        ctx.strokeStyle = '#8B4513'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(halfSize * 0.3 + walkOffset, 0, halfSize * 0.8, Math.PI * 0.6, Math.PI * 1.4); ctx.stroke(); // Bow
+                        if (unit.isAttacking) { ctx.fillStyle = 'yellow'; ctx.beginPath(); ctx.moveTo(halfSize * 0.5 + walkOffset, 0); ctx.lineTo(halfSize * 1.5 + walkOffset, 0); ctx.lineTo(halfSize * 1.3 + walkOffset, -2); ctx.moveTo(halfSize * 1.5 + walkOffset, 0); ctx.lineTo(halfSize * 1.3 + walkOffset, 2); ctx.fill(); } // Arrow flash
+                        break;
+                    case 'skeletons':
+                        ctx.fillStyle = color; ctx.beginPath(); ctx.arc(0 + walkOffset, -halfSize * 0.5, halfSize * 0.4, 0, Math.PI * 2); ctx.fill(); // Head
+                        ctx.fillRect(-1 + walkOffset, -halfSize * 0.2, 2, size * 0.8); // Body
+                        if (unit.isAttacking) { ctx.fillStyle = 'rgba(255, 0, 0, 0.5)'; ctx.fillRect(-1 + walkOffset, -halfSize * 0.2, 2, size * 0.8); } // Red flash on body
+                        break;
+                    case 'bats': // Air units don't have walk animation here
+                         ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(0, -halfSize * 0.6); ctx.lineTo(halfSize * 0.5, 0); ctx.lineTo(0, halfSize * 0.6); ctx.lineTo(-halfSize * 0.5, 0); ctx.closePath(); ctx.fill(); // Body
+                         const wingYOffset = (unit.walkFrame === 1) ? -halfSize * 0.1 : 0; // Simple flap based on frame
+                         ctx.beginPath(); ctx.moveTo(-halfSize * 0.4, -halfSize * 0.1); ctx.lineTo(-halfSize * 1.2, -halfSize * 0.5 + wingYOffset); ctx.lineTo(-halfSize * 1.0, halfSize * 0.2); ctx.closePath(); ctx.fill(); // Left Wing
+                         ctx.beginPath(); ctx.moveTo(halfSize * 0.4, -halfSize * 0.1); ctx.lineTo(halfSize * 1.2, -halfSize * 0.5 + wingYOffset); ctx.lineTo(halfSize * 1.0, halfSize * 0.2); ctx.closePath(); ctx.fill(); // Right Wing
+                         if (unit.isAttacking) { ctx.fillStyle = 'rgba(255, 255, 0, 0.6)'; ctx.beginPath(); ctx.arc(0, 0, halfSize * 0.5, 0, Math.PI * 2); ctx.fill(); } // Attack flash
+                         break;
+                    case 'hogrider':
+                        ctx.fillStyle = '#A9A9A9'; ctx.fillRect(-halfSize * 0.8 + walkOffset, 0, size * 1.6, size * 0.8); // Hog body
+                        ctx.fillStyle = color; ctx.fillRect(-halfSize * 0.4 + walkOffset, -halfSize * 1.2, size * 0.8, size * 1.2); // Rider body
+                        ctx.fillStyle = lightenColor(color, 20); ctx.beginPath(); ctx.arc(0 + walkOffset, -halfSize * 1.3, halfSize * 0.3, 0, Math.PI * 2); ctx.fill(); // Rider head
+                        ctx.strokeStyle = '#696969'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(halfSize * 0.3 + walkOffset, -halfSize * 0.5);
+                        if (unit.isAttacking) { ctx.lineTo(halfSize * 1.0 + walkOffset, halfSize * 1.0); ctx.fillStyle = '#808080'; ctx.fillRect(halfSize*0.8 + walkOffset, halfSize*0.8, halfSize*0.5, halfSize*0.5); } // Attack pose
+                        else { ctx.lineTo(halfSize * 0.8 + walkOffset, -halfSize * 1.0); ctx.fillStyle = '#808080'; ctx.fillRect(halfSize*0.6 + walkOffset, -halfSize*1.2, halfSize*0.5, halfSize*0.5); } // Idle/Walk pose
+                        ctx.stroke();
+                        break;
+                    case 'melee': // Mini Pekka
+                        ctx.fillStyle = color; ctx.fillRect(-halfSize * 0.7 + walkOffset, -halfSize * 0.9, size * 1.4, size * 1.8); // Body
+                        ctx.fillStyle = lightenColor(color, 30); ctx.beginPath(); ctx.moveTo(-halfSize*0.3 + walkOffset, -halfSize*0.9); ctx.lineTo(-halfSize*0.5 + walkOffset, -halfSize*1.3); ctx.lineTo(-halfSize*0.1 + walkOffset, -halfSize*1.1); ctx.fill(); // Horn L
+                        ctx.beginPath(); ctx.moveTo(halfSize*0.3 + walkOffset, -halfSize*0.9); ctx.lineTo(halfSize*0.5 + walkOffset, -halfSize*1.3); ctx.lineTo(halfSize*0.1 + walkOffset, -halfSize*1.1); ctx.fill(); // Horn R
+                        ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(halfSize * 0.6 + walkOffset, -halfSize * 0.2);
+                        if (unit.isAttacking) { ctx.lineTo(halfSize * 1.6 + walkOffset, -halfSize * 0.2); } else { ctx.lineTo(halfSize * 1.3 + walkOffset, halfSize * 0.9); } ctx.stroke(); // Sword
+                        break;
+                    case 'tank': // Giant
+                        ctx.fillStyle = color; ctx.fillRect(-halfSize + walkOffset, -halfSize, size, size); // Body
+                        ctx.fillStyle = lightenColor(color, 10); const fistOffset = unit.isAttacking ? halfSize * 0.6 : halfSize * 0.4;
+                        ctx.beginPath(); ctx.arc(fistOffset + walkOffset, halfSize * 0.3, halfSize * 0.3, 0, Math.PI * 2); ctx.fill(); // Fist R
+                        ctx.beginPath(); ctx.arc(fistOffset + walkOffset, -halfSize * 0.3, halfSize * 0.3, 0, Math.PI * 2); ctx.fill(); // Fist L
+                        break;
+                    case 'assassin': // Bandit
+                         ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(0 + walkOffset, -halfSize); ctx.lineTo(halfSize + walkOffset, 0); ctx.lineTo(0 + walkOffset, halfSize); ctx.lineTo(-halfSize + walkOffset, 0); ctx.closePath(); ctx.fill(); // Body
+                         ctx.fillStyle = lightenColor(color, 30); ctx.fillRect(-halfSize*0.3 + walkOffset, -halfSize*0.4, halfSize*0.6, halfSize*0.3); // Mask
+                         if (unit.isAttacking) { ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; ctx.beginPath(); ctx.arc(halfSize * 0.8 + walkOffset, 0, halfSize * 0.4, 0, Math.PI * 2); ctx.fill(); } // Attack flash
+                         break;
+                    default: // Fallback
+                        ctx.fillStyle = color; ctx.fillRect(-halfSize + walkOffset, -halfSize, size, size);
+                        break;
+                }
             }
 
-            ctx.restore(); // Restore context
+            ctx.restore(); // Restore context (including alpha)
 
-            // Draw health bar above the unit (outside the translated context)
-            drawHealthBar(x - halfSize, y - size - 5, size, 5, unit.hp, unit.maxHp); // Adjusted Y position for health bar
+            // Draw health bar only if unit is not dying or just started dying
+            if (!unit.isDying || alpha > 0.5) {
+                 drawHealthBar(x - halfSize, y - size - 5, size, 5, unit.hp, unit.maxHp);
+            }
         }
 
         // --- *** MODIFIED: drawBuilding includes attack animation *** ---
@@ -891,35 +793,38 @@
             updateDisplays(); updateBattleButtons();
         }
         // --- *** MODIFIED: deployUnit adds attack state properties *** ---
-        function deployUnit(cardId, isPlayer) {
+        function deployUnit(cardId, isPlayer, deployX = null, deployY = null) {
              const card = getCardById(cardId);
              if (!card || card.type !== 'unit') { console.error("Invalid unit type for deployment:", cardId); return; }
 
-             const kingTower = isPlayer ? playerTowers[1] : enemyTowers[1];
-             const spawnXBase = kingTower.x + (isPlayer ? kingTower.width + 20 : -20 - (card.stats.size || card.stats.unitStats?.size || 15));
-             const spawnYBase = kingTower.y + (Math.random() * 80 - 40);
+             let spawnXBase, spawnYBase;
+             if (deployX !== null && deployY !== null) { spawnXBase = deployX; spawnYBase = deployY; }
+             else { const kingTower = isPlayer ? playerTowers[1] : enemyTowers[1]; spawnXBase = kingTower.x + kingTower.width + 20; spawnYBase = kingTower.y + (Math.random() * 80 - 40); }
 
-             const addAttackState = (obj) => {
-                 obj.isAttacking = false;
-                 obj.attackAnimationEndTime = 0;
+             // --- MODIFICATION START: Add animation state properties ---
+             const addAnimationState = (obj) => {
+                 obj.isAttacking = false; obj.attackAnimationEndTime = 0; // Existing attack state
+                 obj.isMoving = false; obj.walkFrame = 0; // NEW: Walk state
+                 obj.isDying = false; obj.deathAnimationEndTime = 0; // NEW: Death state
                  return obj;
              };
+             // --- MODIFICATION END ---
 
              if (card.stats.spawnCount && card.stats.unitStats) { // Multi-spawn
                  const unitStats = card.stats.unitStats; const spawnCount = card.stats.spawnCount; const enemyColor = ENEMY_COLORS[cardId] || '#FFFFFF';
                  for (let i = 0; i < spawnCount; i++) {
                      const spawnYOffset = (Math.random() - 0.5) * 30 * spawnCount; const spawnXOffset = (Math.random() - 0.5) * 10;
                      let newUnit = { id: `${cardId}_${Date.now()}_${Math.random()}_${i}`, type: cardId, stats: { ...unitStats }, x: spawnXBase + spawnXOffset, y: spawnYBase + spawnYOffset, isPlayer: isPlayer, hp: unitStats.hp, maxHp: unitStats.maxHp, color: isPlayer ? unitStats.color : enemyColor, target: null, lastAttackTime: 0, };
-                     newUnit = addAttackState(newUnit); // Add attack state
+                     newUnit = addAnimationState(newUnit); // Add animation state
                      if (isPlayer) playerUnits.push(newUnit); else enemyUnits.push(newUnit);
                  }
              } else { // Single-spawn
                  const stats = card.stats; const enemyColor = ENEMY_COLORS[cardId] || '#FFFFFF';
                  let newUnit = { id: `${cardId}_${Date.now()}_${Math.random()}`, type: cardId, stats: { ...stats }, x: spawnXBase, y: spawnYBase, isPlayer: isPlayer, hp: stats.hp, maxHp: stats.maxHp, color: isPlayer ? stats.color : enemyColor, target: null, lastAttackTime: 0, };
-                 newUnit = addAttackState(newUnit); // Add attack state
+                 newUnit = addAnimationState(newUnit); // Add animation state
                  if (isPlayer) playerUnits.push(newUnit); else enemyUnits.push(newUnit);
              }
-             console.log(`${isPlayer ? 'Player' : 'AI'} deployed ${card.name}`);
+             // console.log(`${isPlayer ? 'Player' : 'AI'} deployed ${card.name}`);
          }
         // --- *** MODIFIED: deployBuilding adds attack state properties *** ---
         function deployBuilding(cardId, isPlayer, x, y) {
@@ -951,33 +856,33 @@
 
 
         // --- Targeting, Movement, Attack Logic ---
-        function findTarget(unit, potentialEnemyUnits, potentialEnemyTowers, potentialEnemyBuildings) { /* ... (no changes) ... */
-             let closestTarget = null; let minDistance = Infinity; if (!unit || !unit.stats || unit.hp <= 0) return null;
+        function findTarget(unit, potentialEnemyUnits, potentialEnemyTowers, potentialEnemyBuildings) {
+             let closestTarget = null; let minDistance = Infinity;
+             // --- MODIFICATION START: Check isDying ---
+             if (!unit || !unit.stats || unit.hp <= 0 || unit.isDying) return null;
+             // --- MODIFICATION END ---
+
              const unitRange = unit.stats.range; const preference = unit.stats.targetPreference;
              const canTargetAir = unit.stats.targets?.includes('air') ?? true; const canTargetGround = unit.stats.targets?.includes('ground') ?? true;
              let preferredTargets = []; let otherTargets = [];
              const allEnemies = [...potentialEnemyUnits, ...potentialEnemyTowers, ...potentialEnemyBuildings];
+
              allEnemies.forEach(target => {
-                 if (!target || target.hp <= 0) return;
+                 // --- MODIFICATION START: Check target.isDying ---
+                 if (!target || target.hp <= 0 || target.isDying) return;
+                 // --- MODIFICATION END ---
                  const targetIsAir = target.stats?.isAir; const targetIsBuilding = target.isBuilding || target.isTower;
                  if (targetIsAir && !canTargetAir) return; if (!targetIsAir && !canTargetGround) return;
                  if (preference === 'building' && targetIsBuilding) { preferredTargets.push(target); }
                  else if (preference !== 'building' || !targetIsBuilding) { otherTargets.push(target); }
              });
-             preferredTargets.forEach(target => {
-                 const targetCenterX = target.x + (target.width ? target.width / 2 : 0); const targetCenterY = target.y;
-                 const d = distance(unit.x, unit.y, targetCenterX, targetCenterY); if (d < minDistance) { minDistance = d; closestTarget = target; }
-             });
-             if (!closestTarget || minDistance > unitRange) {
-                 if (minDistance > unitRange) minDistance = Infinity;
-                 otherTargets.forEach(target => {
-                     const targetCenterX = target.x + (target.width ? target.width / 2 : 0); const targetCenterY = target.y;
-                     const d = distance(unit.x, unit.y, targetCenterX, targetCenterY); if (d < minDistance) { minDistance = d; closestTarget = target; }
-                 });
-             }
+             // ... (rest of targeting logic remains the same) ...
+             preferredTargets.forEach(target => { const targetCenterX = target.x + (target.width ? target.width / 2 : 0); const targetCenterY = target.y; const d = distance(unit.x, unit.y, targetCenterX, targetCenterY); if (d < minDistance) { minDistance = d; closestTarget = target; } });
+             if (!closestTarget || minDistance > unitRange) { if (minDistance > unitRange) minDistance = Infinity; otherTargets.forEach(target => { const targetCenterX = target.x + (target.width ? target.width / 2 : 0); const targetCenterY = target.y; const d = distance(unit.x, unit.y, targetCenterX, targetCenterY); if (d < minDistance) { minDistance = d; closestTarget = target; } }); }
              if (closestTarget && minDistance > unitRange) { return null; }
              return closestTarget;
         }
+        
          function findTowerTarget(tower, potentialEnemyUnits, potentialEnemyBuildings) { /* ... (no changes) ... */
              let closestTarget = null; let minDistance = tower.range; if (!tower || tower.hp <= 0) return null;
              const canTargetAir = tower.targets?.includes('air'); const canTargetGround = tower.targets?.includes('ground');
@@ -990,11 +895,15 @@
              });
              return closestTarget;
          }
-         function findBuildingTarget(building, potentialEnemyUnits) { /* ... (no changes) ... */
-             let closestTarget = null; let minDistance = building.stats.range; if (!building || building.hp <= 0) return null;
+         function findBuildingTarget(building, potentialEnemyUnits) {
+             let closestTarget = null; let minDistance = building.stats.range;
+             if (!building || building.hp <= 0) return null;
              const canTargetAir = building.stats.targets?.includes('air'); const canTargetGround = building.stats.targets?.includes('ground');
+
              potentialEnemyUnits.forEach(target => {
-                  if(!target || target.hp <= 0) return;
+                  // --- MODIFICATION START: Check target.isDying ---
+                  if(!target || target.hp <= 0 || target.isDying) return;
+                  // --- MODIFICATION END ---
                   const targetIsAir = target.stats?.isAir; if (targetIsAir && !canTargetAir) return; if (!targetIsAir && !canTargetGround) return;
                  const d = distance(building.x, building.y, target.x, target.y); if (d < minDistance) { minDistance = d; closestTarget = target; }
              });
@@ -1008,31 +917,41 @@
 
             for (let i = units.length - 1; i >= 0; i--) {
                 const unit = units[i];
-                 if (!unit || unit.hp <= 0 || !unit.stats) continue;
+                 if (!unit || !unit.stats) continue; // Process even if HP is 0 to handle death animation trigger
 
-                // Reset attack state if animation time ended
-                if (unit.isAttacking && currentTime > unit.attackAnimationEndTime) {
-                    unit.isAttacking = false;
-                }
+                 // --- Handle Death State Trigger ---
+                 if (unit.hp <= 0 && !unit.isDying) {
+                     unit.isDying = true;
+                     unit.deathAnimationEndTime = currentTime + DEATH_ANIMATION_DURATION;
+                     unit.target = null; // Stop targeting
+                     console.log(`Unit ${unit.id} started dying.`);
+                     // Don't remove from array here, let gameLoop handle it after animation
+                 }
+
+                 // Skip updates if dying
+                 if (unit.isDying) continue;
+
+                // Reset attack state if animation time ended (moved to gameLoop)
 
                 // Handle Pushback
                 if (unit.isPushedBack && currentTime < unit.pushbackEndTime) {
                     unit.x += unit.pushbackVelocityX; unit.y += unit.pushbackVelocityY;
                     unit.x = Math.max(unit.stats.size / 2, Math.min(canvas.width - unit.stats.size / 2, unit.x));
                     unit.y = Math.max(unit.stats.size / 2, Math.min(canvas.height - unit.stats.size / 2, unit.y));
-                    continue; // Skip normal logic while being pushed back
+                    unit.isMoving = true; // Considered moving while pushed
+                    continue;
                 } else if (unit.isPushedBack) {
-                    unit.isPushedBack = false; // Pushback finished
+                    unit.isPushedBack = false;
                 }
 
                  // Targeting
-                 let targetNeedsUpdate = !unit.target || unit.target.hp <= 0;
+                 let targetNeedsUpdate = !unit.target || unit.target.hp <= 0 || unit.target.isDying; // Check if target is dying
                  if (targetNeedsUpdate) {
                      unit.target = findTarget(unit, enemyUnitsList, enemyTowersList, enemyBuildingsList);
                  }
 
                 // Attacking
-                let performedAttackThisFrame = false; // Use local flag to avoid setting isAttacking=false immediately
+                let performedAttackThisFrame = false;
                 if (unit.target) {
                     const targetWidth = unit.target.width || (unit.target.stats ? unit.target.stats.size : 0);
                     const targetCenterX = unit.target.x + (targetWidth / 2);
@@ -1040,22 +959,13 @@
                     const distToTarget = distance(unit.x, unit.y, targetCenterX, targetCenterY);
 
                     if (distToTarget <= unit.stats.range) {
-                        performedAttackThisFrame = true; // Assume attacking if in range
+                        performedAttackThisFrame = true; // In range
                         if (currentTime - unit.lastAttackTime >= unit.stats.attackSpeed) {
-                             // --- Set Attack State ---
-                             unit.isAttacking = true;
-                             unit.attackAnimationEndTime = currentTime + ATTACK_ANIMATION_DURATION;
-                             // --- End Set Attack State ---
-
-                             if (unit.stats.range > 30) { // Ranged Attack
-                                 projectiles.push({ x: unit.x, y: unit.y, target: unit.target, speed: 5, damage: unit.stats.damage, color: unit.color, size: 5, isPlayerProjectile: unit.isPlayer });
-                                 // attackEffects.push({ type: 'flash', x: unit.x, y: unit.y, radius: unit.stats.size / 3, duration: 100, startTime: currentTime }); // Replaced by isAttacking visual
-                             } else { // Melee Attack
-                                 unit.target.hp -= unit.stats.damage;
-                                 // attackEffects.push({ type: 'slash', ... }); // Replaced by isAttacking visual
-                             }
+                             unit.isAttacking = true; unit.attackAnimationEndTime = currentTime + ATTACK_ANIMATION_DURATION;
+                             if (unit.stats.range > 30) { projectiles.push({ /* ... */ }); }
+                             else { unit.target.hp -= unit.stats.damage; }
                              unit.lastAttackTime = currentTime;
-                             if (unit.target.hp <= 0) { unit.target = null; performedAttackThisFrame = false; } // Target died
+                             if (unit.target.hp <= 0) { unit.target = null; performedAttackThisFrame = false; }
                         }
                     } else {
                          unit.target = null; // Target moved out of range
@@ -1066,6 +976,8 @@
                 }
 
                  // Movement
+                 const previousX = unit.x;
+                 const previousY = unit.y;
                  if (!performedAttackThisFrame) { // Only move if not in range or attack on cooldown
                      let moveTarget = unit.target;
                      if (!moveTarget) { moveTarget = findTarget(unit, enemyUnitsList, enemyTowersList, enemyBuildingsList); }
@@ -1080,6 +992,11 @@
                          unit.x += unit.stats.speed * direction;
                      }
                  }
+
+                 // --- Update Movement State ---
+                 unit.isMoving = (unit.x !== previousX || unit.y !== previousY);
+                 // --- End Update Movement State ---
+
 
                  // Boundary checks
                  unit.x = Math.max(unit.stats.size / 2, Math.min(canvas.width - unit.stats.size / 2, unit.x));
@@ -1196,9 +1113,8 @@
                  else if (p.x < -p.size || p.x > canvas.width + p.size || p.y < -p.size || p.y > canvas.height + p.size) { projectiles.splice(i, 1); }
             }
         }
-         function cleanupDeadUnits() { /* ... (no changes) ... */
-             playerUnits = playerUnits.filter(unit => unit && unit.hp > 0);
-             enemyUnits = enemyUnits.filter(unit => unit && unit.hp > 0);
+         function cleanupDeadUnits() {
+             // Units are cleaned up in gameLoop after death animation
              playerBuildings = playerBuildings.filter(building => building && building.hp > 0);
              enemyBuildings = enemyBuildings.filter(building => building && building.hp > 0);
          }
@@ -1487,14 +1403,21 @@
         function gameLoop() {
             if (gameOver) { animationFrameId = null; return; }
             const currentTime = Date.now();
+            gameFrameCounter++; // Increment frame counter for animations
             if (!ctx) { console.error("Canvas context lost during loop!"); stopGameTimers(); return; }
 
-            // --- Reset Attack States ---
-            // Reset isAttacking flag based on timer before updates run
-            const allEntities = [...playerUnits, ...enemyUnits, ...playerTowers, ...enemyTowers, ...playerBuildings, ...enemyBuildings];
-            allEntities.forEach(entity => {
-                if (entity && entity.isAttacking && currentTime > entity.attackAnimationEndTime) {
-                    entity.isAttacking = false;
+            // --- Reset Attack States & Update Walk Frame ---
+            const allUnitsAndStructures = [...playerUnits, ...enemyUnits, ...playerTowers, ...enemyTowers, ...playerBuildings, ...enemyBuildings];
+            allUnitsAndStructures.forEach(entity => {
+                if (entity) {
+                    // Reset attack animation flag if timer expired
+                    if (entity.isAttacking && currentTime > entity.attackAnimationEndTime) {
+                        entity.isAttacking = false;
+                    }
+                    // Toggle walk frame for units based on interval (only if it's a unit)
+                    if (!entity.isTower && !entity.isBuilding && entity.isMoving && gameFrameCounter % WALK_ANIMATION_INTERVAL === 0) {
+                         entity.walkFrame = 1 - (entity.walkFrame || 0); // Toggle 0 and 1
+                    }
                 }
             });
 
@@ -1504,7 +1427,8 @@
                     updateProjectiles(); updateLogProjectiles(logProjectiles, enemyUnits, playerUnits);
                     updateUnits(playerUnits, enemyUnits, enemyTowers, enemyBuildings); updateUnits(enemyUnits, playerUnits, playerTowers, playerBuildings);
                     updateTowers(playerTowers, enemyUnits, enemyBuildings); updateTowers(enemyTowers, playerUnits, playerBuildings);
-                    updateBuildings(playerBuildings, enemyUnits); updateBuildings(enemyBuildings, playerUnits); cleanupDeadUnits();
+                    updateBuildings(playerBuildings, enemyUnits); updateBuildings(enemyBuildings, playerUnits);
+                    cleanupDeadUnits(); // Clean up expired/dead buildings ONLY
                 }
                 updateAttackEffects(currentTime); // Update visual effects (explosions, etc.)
                 updateDisplays(); // Update UI text/bars
@@ -1513,23 +1437,31 @@
             // --- Drawing Phase ---
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             try {
-                // Draw static elements first
                 playerTowers.forEach(drawTower); enemyTowers.forEach(drawTower);
                 playerBuildings.forEach(drawBuilding); enemyBuildings.forEach(drawBuilding);
-
                 if (!isTiebreakerActive) {
-                    // Draw dynamic elements if not in tiebreaker
-                    playerUnits.forEach(drawUnit); enemyUnits.forEach(drawUnit);
+                    playerUnits.forEach(drawUnit); enemyUnits.forEach(drawUnit); // Draw units (handles dying state)
                     projectiles.forEach(drawProjectile); logProjectiles.forEach(drawLogProjectile);
-                } else {
-                    // Draw Tiebreaker HP Drain Animation
-                    tiebreakerEffectCounter++;
-                    if (tiebreakerEffectCounter % 30 < 15) { /* ... (tiebreaker drawing logic) ... */ }
-                }
-                // Draw separate attack effects (explosions, non-unit flashes) on top
-                drawAttackEffects();
-
+                } else { /* Tiebreaker drawing */ }
+                drawAttackEffects(); // Draw separate attack effects
             } catch (error) { console.error("Error during game drawing:", error); stopGameTimers(); showMessage("An error occurred during drawing!"); return; }
+
+            // --- Cleanup Phase (Remove units after death animation) ---
+             if (!isTiebreakerActive) {
+                 // Iterate backwards for safe removal during iteration
+                 for (let i = playerUnits.length - 1; i >= 0; i--) {
+                     const unit = playerUnits[i];
+                     if (unit.isDying && currentTime > unit.deathAnimationEndTime) {
+                         playerUnits.splice(i, 1); // Remove unit after animation
+                     }
+                 }
+                 for (let i = enemyUnits.length - 1; i >= 0; i--) {
+                      const unit = enemyUnits[i];
+                      if (unit.isDying && currentTime > unit.deathAnimationEndTime) {
+                          enemyUnits.splice(i, 1); // Remove unit after animation
+                      }
+                  }
+             }
 
             // --- Post-Draw Checks ---
             if (!isTiebreakerActive) { checkGameOver(false); }
@@ -1538,6 +1470,8 @@
             if (!gameOver) { animationFrameId = requestAnimationFrame(gameLoop); }
              else { animationFrameId = null; }
         }
+
+
 
 
         // --- Initialization ---
