@@ -240,8 +240,20 @@
              hogrider: '#e67e22', // Enemy Hog color
              cannon: '#7f8c8d', // Enemy Cannon color
         }
-        const AI_DEPLOY_INTERVAL = 3000; // AI thinks every 3 seconds
+        const AI_DEPLOY_INTERVAL = 2500; // AI thinks slightly faster
         const AI_STARTING_ELIXIR = 5;
+        // Defines the pool of cards the AI can choose from. Assumes these are implemented.
+        const AI_DECK = ['knight', 'archer', 'giant', 'skeletons', 'bats', 'hogrider', 'cannon', 'fireball'];
+        // Simple counter map: key is unit type AI wants to counter, value is a preferred counter card ID
+        const AI_COUNTERS = {
+            'hogrider': 'cannon', // Cannon counters Hog
+            'giant': 'cannon',    // Cannon counters Giant
+            'tank': 'cannon',     // Cannon generally good vs tanks
+            'knight': 'skeletons',// Skeletons distract Knight
+            'melee': 'skeletons', // Skeletons distract Mini Pekka
+            'ranged': 'knight',   // Knight can tank archers
+            'default': 'knight'   // Default counter if specific isn't found
+        };
 
         // --- Game State ---
         let selectedDeck = [];
@@ -1193,26 +1205,213 @@
          function updateAttackEffects(currentTime) { /* ... (no changes) ... */
              attackEffects = attackEffects.filter(effect => currentTime - effect.startTime <= effect.duration);
          }
-         function simpleAI() { /* ... (no changes) ... */
-             if (gameOver || isTiebreakerActive || isPlacingBuilding || isTargetingSpell) return;
-             if (aiElixir >= getCardById('cannon').cost) {
-                  let needsDefense = false; playerUnits.forEach(unit => { if (distance(unit.x, unit.y, enemyTowers[1].x + enemyTowers[1].width/2, enemyTowers[1].y) < 250) { needsDefense = true; } });
-                  if (needsDefense && enemyBuildings.length < 2) {
-                      const placeX = enemyTowers[1].x - 50; const placeY = canvas.height / 2 + (Math.random() * 100 - 50);
-                      if (isValidPlacement(placeX, placeY, false)) {
-                          aiElixir -= getCardById('cannon').cost; deployBuilding('cannon', false, placeX, placeY); console.log("AI deployed defensive Cannon"); updateDisplays(); updateBattleButtons(); return;
+         function getThreateningPlayerUnits(targetStructure, detectionRange = 150) {
+            return playerUnits.filter(unit => {
+                if (!unit || unit.hp <= 0) return false;
+                // Ensure targetStructure is valid and has coordinates
+                if (!targetStructure || typeof targetStructure.x === 'undefined' || typeof targetStructure.y === 'undefined') return false;
+                const targetX = targetStructure.x + (targetStructure.width ? targetStructure.width / 2 : 0);
+                const targetY = targetStructure.y;
+                return distance(unit.x, unit.y, targetX, targetY) < detectionRange;
+            });
+        }
+        
+        function findBestCounter(unitToCounter, availableCards, currentElixir) {
+            // Try specific counter first
+            const counterCardId = AI_COUNTERS[unitToCounter.type] || AI_COUNTERS['default'];
+            const counterCard = getCardById(counterCardId);
+            if (counterCard && availableCards.includes(counterCardId) && currentElixir >= counterCard.cost) {
+                return counterCard;
+            }
+            // Fallback: find cheapest available unit if direct counter fails or not affordable
+            let cheapestCard = null;
+            let minCost = Infinity;
+            availableCards.forEach(cardId => {
+                const card = getCardById(cardId);
+                // Ensure card exists, is implemented, is a unit, and is affordable
+                if (card && card.implemented && card.type === 'unit' && card.cost < minCost && currentElixir >= card.cost) {
+                    minCost = card.cost;
+                    cheapestCard = card;
+                }
+            });
+            return cheapestCard; // Might return null if nothing is affordable/available
+        }
+        
+        function findDefensivePlacement(threatenedStructure, cardToDeploy) {
+            const buffer = 30;
+            // Place slightly behind (more towards AI king tower) the structure
+            let placeX = threatenedStructure.x + buffer; // Place to the right (further back for AI)
+            const placeY = threatenedStructure.y + (Math.random() * 60 - 30); // Slight Y variance
+
+            // Ensure placement is on AI side and within bounds
+            const cardSize = cardToDeploy?.stats?.size || PLACEMENT_TILE_SIZE; // Use card size if available
+            placeX = Math.max(PLAYER_SIDE_X_LIMIT + cardSize / 2 + 5, placeX); // Ensure on AI side
+            placeX = Math.min(canvas.width - cardSize / 2 - 5, placeX); // Ensure within right bound
+            const finalY = Math.max(cardSize / 2 + 5, Math.min(canvas.height - cardSize / 2 - 5, placeY)); // Ensure within top/bottom bounds
+
+            // Basic check against existing AI buildings/towers - could be improved with isValidPlacement
+            let tooClose = false;
+            [...enemyTowers, ...enemyBuildings].forEach(entity => {
+                 if (!entity || entity.hp <= 0) return;
+                 if (distance(placeX, finalY, entity.x + (entity.width ? entity.width/2 : 0), entity.y) < cardSize) {
+                     tooClose = true;
+                 }
+            });
+            // If too close, adjust slightly? For now, just return calculated position.
+            // A better approach would integrate isValidPlacement(placeX, finalY, false)
+
+            return { x: placeX, y: finalY };
+        }
+        
+        function findOffensivePlacement(targetStructure, cardToDeploy) {
+             // Place near the middle line, towards the target structure's Y
+             let placeX = PLAYER_SIDE_X_LIMIT + 40 + (Math.random() * 30); // Just across the middle
+             let placeY = targetStructure ? targetStructure.y + (Math.random() * 80 - 40) : canvas.height / 2; // Aim towards target Y or center
+
+             // Ensure placement is within bounds
+             const cardSize = cardToDeploy?.stats?.size || PLACEMENT_TILE_SIZE;
+             placeX = Math.max(PLAYER_SIDE_X_LIMIT + cardSize / 2 + 5, placeX); // Ensure on AI side
+             placeX = Math.min(canvas.width - cardSize / 2 - 5, placeX); // Ensure within right bound
+             placeY = Math.max(cardSize / 2 + 5, Math.min(canvas.height - cardSize / 2 - 5, placeY)); // Ensure within top/bottom bounds
+
+             return { x: placeX, y: placeY };
+        }
+        
+        function updateAI() {
+            if (gameOver || isTiebreakerActive || isPlacingBuilding || isTargetingSpell) return; // Don't act if game/player busy
+
+            const aiKingTower = enemyTowers[1];
+            const availableCards = AI_DECK; // AI uses its fixed deck
+            let actionTaken = false;
+
+            // --- 1. High Priority Defense (King Tower) ---
+            const kingThreats = getThreateningPlayerUnits(aiKingTower, 180); // Larger detection range for king
+            if (kingThreats.length > 0) {
+                const mainThreat = kingThreats.sort((a, b) => distance(a.x, a.y, aiKingTower.x, aiKingTower.y) - distance(b.x, b.y, aiKingTower.x, aiKingTower.y))[0]; // Target closest threat
+                const counterCard = findBestCounter(mainThreat, availableCards, aiElixir);
+                if (counterCard) {
+                    const placePos = findDefensivePlacement(aiKingTower, counterCard);
+                    if (counterCard.type === 'building') {
+                         // Use isValidPlacement for AI side
+                         if (isValidPlacement(placePos.x, placePos.y, false)) {
+                             aiElixir -= counterCard.cost;
+                             deployBuilding(counterCard.id, false, placePos.x, placePos.y);
+                             actionTaken = true;
+                             console.log(`AI Defense (King): Deploying ${counterCard.name} against ${mainThreat.type}`);
+                         } else { console.log("AI Defense (King): Invalid placement for building."); }
+                    } else { // Unit
+                        aiElixir -= counterCard.cost;
+                        deployUnit(counterCard.id, false, placePos.x, placePos.y); // Pass coords
+                        actionTaken = true;
+                        console.log(`AI Defense (King): Deploying ${counterCard.name} against ${mainThreat.type}`);
+                    }
+                }
+            }
+
+            // --- 2. General Defense (Other Towers/Buildings) ---
+            if (!actionTaken) {
+                const structuresToDefend = [...enemyTowers.filter(t => !t.isKingTower && t.hp > 0), ...enemyBuildings.filter(b => b.hp > 0)];
+                structuresToDefend.sort((a,b) => a.hp - b.hp); // Prioritize lower HP structures slightly? Or closest threat?
+
+                for (const structure of structuresToDefend) {
+                    const threats = getThreateningPlayerUnits(structure, 150);
+                    if (threats.length > 0) {
+                        const closestThreat = threats.sort((a, b) => distance(a.x, a.y, structure.x, structure.y) - distance(b.x, b.y, structure.x, structure.y))[0];
+                        const counterCard = findBestCounter(closestThreat, availableCards, aiElixir);
+                        if (counterCard) {
+                            const placePos = findDefensivePlacement(structure, counterCard);
+                             if (counterCard.type === 'building') {
+                                 if (isValidPlacement(placePos.x, placePos.y, false)) {
+                                     aiElixir -= counterCard.cost;
+                                     deployBuilding(counterCard.id, false, placePos.x, placePos.y);
+                                     actionTaken = true;
+                                     console.log(`AI Defense: Deploying ${counterCard.name} against ${closestThreat.type} near ${structure.id}`);
+                                 } else { console.log("AI Defense: Invalid placement for building."); }
+                            } else { // Unit
+                                aiElixir -= counterCard.cost;
+                                deployUnit(counterCard.id, false, placePos.x, placePos.y);
+                                actionTaken = true;
+                                console.log(`AI Defense: Deploying ${counterCard.name} against ${closestThreat.type} near ${structure.id}`);
+                            }
+                            if(actionTaken) break; // Only handle one defense per cycle
+                        }
+                    }
+                }
+            }
+
+            // --- 3. Build Offensive Push (High Elixir) ---
+            if (!actionTaken && aiElixir >= 7) {
+                 const tankCardId = availableCards.find(id => ['giant', 'tank'].includes(id)); // Find Giant or generic tank
+                 const tankCard = tankCardId ? getCardById(tankCardId) : null;
+
+                 if (tankCard && aiElixir >= tankCard.cost) {
+                     let targetStructure = playerTowers.filter(t => t.hp > 0).sort((a,b) => a.hp - b.hp)[0] || playerBuildings.filter(b => b.hp > 0).sort((a,b) => a.hp - b.hp)[0]; // Target lowest HP structure
+                     if (!targetStructure) targetStructure = playerTowers[1]; // Fallback to king tower
+
+                     const placePos = findOffensivePlacement(targetStructure, tankCard);
+                     aiElixir -= tankCard.cost;
+                     deployUnit(tankCard.id, false, placePos.x, placePos.y);
+                     actionTaken = true;
+                     console.log(`AI Offense: Starting push with ${tankCard.name}`);
+                     // Simple: Try to deploy archer behind if affordable immediately
+                     const archerCard = getCardById('archer');
+                     if (availableCards.includes('archer') && aiElixir >= archerCard.cost) {
+                         setTimeout(() => { // Deploy slightly later
+                            if (aiElixir >= archerCard.cost) { // Check elixir again
+                                aiElixir -= archerCard.cost;
+                                deployUnit('archer', false, placePos.x - 15, placePos.y); // Place behind tank
+                                console.log(`AI Offense: Adding Archer support`);
+                                updateDisplays(); updateBattleButtons();
+                            }
+                         }, 500); // 0.5 sec delay
+                     }
+                 }
+            }
+
+            // --- 4. Opportunistic Attack (Mid Elixir) ---
+             if (!actionTaken && aiElixir >= 4) {
+                 const attackCardId = availableCards.find(id => id === 'hogrider'); // Try Hog Rider
+                 const attackCard = attackCardId ? getCardById(attackCardId) : null;
+
+                 if (attackCard && aiElixir >= attackCard.cost && Math.random() < 0.4) { // Add randomness to hog deployment
+                      let targetStructure = playerBuildings.filter(b => b.hp > 0).sort((a,b) => a.hp - b.hp)[0] || playerTowers.filter(t => t.hp > 0).sort((a,b) => a.hp - b.hp)[0]; // Target lowest HP building/tower
+                      if (!targetStructure) targetStructure = playerTowers[1];
+
+                      const placePos = findOffensivePlacement(targetStructure, attackCard);
+                      aiElixir -= attackCard.cost;
+                      deployUnit(attackCard.id, false, placePos.x, placePos.y);
+                      actionTaken = true;
+                      console.log(`AI Offense: Deploying ${attackCard.name}`);
+                 }
+             }
+
+             // --- 5. Cycle / Prevent Elixir Waste ---
+             if (!actionTaken && aiElixir >= 9) {
+                  let cheapestCard = null; let minCost = Infinity;
+                  availableCards.forEach(cardId => {
+                      const card = getCardById(cardId);
+                      if (card && card.implemented && card.cost < minCost && aiElixir >= card.cost) {
+                          minCost = card.cost; cheapestCard = card;
                       }
+                  });
+                  if (cheapestCard) {
+                       aiElixir -= cheapestCard.cost;
+                       const placePos = findDefensivePlacement(enemyTowers[1], cheapestCard); // Default placement near back
+                       if (cheapestCard.type === 'unit') deployUnit(cheapestCard.id, false, placePos.x, placePos.y);
+                       else if (cheapestCard.type === 'building' && isValidPlacement(placePos.x, placePos.y, false)) deployBuilding(cheapestCard.id, false, placePos.x, placePos.y);
+                       // AI doesn't cycle spells yet
+                       actionTaken = true;
+                       console.log(`AI Cycle: Deploying cheapest card ${cheapestCard.name}`);
                   }
              }
-             if (aiElixir >= getCardById('hogrider').cost + 3 && Math.random() < 0.3) {
-                 aiElixir -= getCardById('hogrider').cost; deployUnit('hogrider', false); console.log("AI deployed Hog Rider"); updateDisplays(); updateBattleButtons(); return;
-             }
-             const deployableUnitCards = FULL_CARD_LIBRARY.filter(card => card.implemented && card.type === 'unit' && card.id !== 'hogrider'); if (deployableUnitCards.length === 0) return;
-             const affordableCards = deployableUnitCards.filter(card => aiElixir >= card.cost);
-             if (affordableCards.length > 0) {
-                 const randomCard = affordableCards[Math.floor(Math.random() * affordableCards.length)]; aiElixir -= randomCard.cost; deployUnit(randomCard.id, false); updateDisplays(); updateBattleButtons();
-             }
-         }
+
+
+            // Update displays if action was taken
+            if (actionTaken) {
+                updateDisplays();
+                updateBattleButtons();
+            }
+        }
 
 
          // --- Game Over Check ---
@@ -1342,7 +1541,7 @@
 
 
         // --- Initialization ---
-        function initializeGame() { /* ... (no changes) ... */
+        function initializeGame() {
              console.log("Initializing Battle..."); gameOver = false; playerElixir = 3; aiElixir = AI_STARTING_ELIXIR;
              playerUnits = []; enemyUnits = []; playerBuildings = []; enemyBuildings = []; projectiles = []; logProjectiles = []; attackEffects = [];
              playerTowers = createTowers(true); enemyTowers = createTowers(false); gameTimeRemaining = BATTLE_DURATION_SECONDS;
@@ -1350,7 +1549,13 @@
              hideMessage(); stopGameTimers(); populateBattleControls(); updateDisplays(); updateBattleButtons();
              if (ctx) { console.log("Drawing initial state..."); ctx.clearRect(0, 0, canvas.width, canvas.height); playerTowers.forEach(drawTower); enemyTowers.forEach(drawTower); }
              else { console.error("Cannot draw initial state - context missing."); return; }
-             console.log("Starting game intervals and loop..."); elixirIntervalId = setInterval(updateElixir, ELIXIR_REGEN_INTERVAL); aiIntervalId = setInterval(simpleAI, AI_DEPLOY_INTERVAL); startGameTimer();
+             console.log("Starting game intervals and loop...");
+             elixirIntervalId = setInterval(updateElixir, ELIXIR_REGEN_INTERVAL);
+             // --- *** MODIFIED: Use new AI function *** ---
+             if (aiIntervalId) clearInterval(aiIntervalId); // Clear previous interval if any
+             aiIntervalId = setInterval(updateAI, AI_DEPLOY_INTERVAL); // Call updateAI
+             // --- End Modification ---
+             startGameTimer();
              if (animationFrameId) cancelAnimationFrame(animationFrameId); animationFrameId = requestAnimationFrame(gameLoop); console.log("Battle Started!");
         }
 
