@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/x-icon" href="./img/CRlogo.png">
-    <title>Simple Tower Clash - Log Fixed</title> <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <title>Simple Tower Clash</title> <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         /* --- CSS (No Changes) --- */
         :root {
@@ -196,6 +196,7 @@
         const DECK_SIZE = 8;
         const PLACEMENT_TILE_SIZE = 30; // For building placement checks
         const PLAYER_SIDE_X_LIMIT = 400; // Midpoint of 800 width canvas
+        const ATTACK_ANIMATION_DURATION = 150; // ms for attack visual
 
         // --- Card Library with imageUrl ---
         const PLACEHOLDER_URL_BASE = "https://placehold.co/60x80/4a6883/ecf0f1?text=";
@@ -247,10 +248,10 @@
         let playerElixir = 3;
         let playerUnits = [];
         let enemyUnits = [];
-        let playerBuildings = []; // <-- Added for buildings
-        let enemyBuildings = []; // <-- Added for buildings
+        let playerBuildings = [];
+        let enemyBuildings = [];
         let projectiles = [];
-        let logProjectiles = []; // <-- Added for The Log
+        let logProjectiles = [];
         let playerTowers = [];
         let enemyTowers = [];
         let attackEffects = [];
@@ -266,8 +267,8 @@
         let tiebreakerEffectCounter = 0;
         let isTargetingSpell = false;
         let currentSpellType = null;
-        let isPlacingBuilding = false; // <-- Added for building placement
-        let currentBuildingType = null; // <-- Added for building placement
+        let isPlacingBuilding = false;
+        let currentBuildingType = null;
 
         // --- Tower Initialization ---
         function createTowers(isPlayer) {
@@ -275,27 +276,45 @@
             const kingY = canvasHeight / 2; const princessYOffset = 60;
             const kingX = isPlayer ? 80 : canvasWidth - 80 - KING_TOWER_WIDTH;
             const princessXOffset = KING_TOWER_WIDTH / 2 + PRINCESS_TOWER_WIDTH / 2 + 15;
-            const kingTower = { id: isPlayer ? 'player_king' : 'enemy_king', x: kingX, y: kingY, hp: KING_TOWER_HP, maxHp: KING_TOWER_HP, width: KING_TOWER_WIDTH, height: KING_TOWER_HEIGHT, range: TOWER_RANGE, damage: KING_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: true, color: isPlayer ? '#3498db' : '#e74c3c', targets: ['air', 'ground'] };
-            const princessLeft = { id: isPlayer ? 'player_pleft' : 'enemy_pleft', x: kingX + (isPlayer ? princessXOffset : -princessXOffset), y: kingY - princessYOffset, hp: PRINCESS_TOWER_HP, maxHp: PRINCESS_TOWER_HP, width: PRINCESS_TOWER_WIDTH, height: PRINCESS_TOWER_HEIGHT, range: TOWER_RANGE, damage: PRINCESS_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: false, color: isPlayer ? '#5dade2' : '#ec7063', targets: ['air', 'ground'] };
-            const princessRight = { id: isPlayer ? 'player_pright' : 'enemy_pright', x: kingX + (isPlayer ? princessXOffset : -princessXOffset), y: kingY + princessYOffset, hp: PRINCESS_TOWER_HP, maxHp: PRINCESS_TOWER_HP, width: PRINCESS_TOWER_WIDTH, height: PRINCESS_TOWER_HEIGHT, range: TOWER_RANGE, damage: PRINCESS_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: false, color: isPlayer ? '#5dade2' : '#ec7063', targets: ['air', 'ground'] };
+            // Add attack state properties
+            const kingTower = { id: isPlayer ? 'player_king' : 'enemy_king', x: kingX, y: kingY, hp: KING_TOWER_HP, maxHp: KING_TOWER_HP, width: KING_TOWER_WIDTH, height: KING_TOWER_HEIGHT, range: TOWER_RANGE, damage: KING_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: true, color: isPlayer ? '#3498db' : '#e74c3c', targets: ['air', 'ground'], isAttacking: false, attackAnimationEndTime: 0 };
+            const princessLeft = { id: isPlayer ? 'player_pleft' : 'enemy_pleft', x: kingX + (isPlayer ? princessXOffset : -princessXOffset), y: kingY - princessYOffset, hp: PRINCESS_TOWER_HP, maxHp: PRINCESS_TOWER_HP, width: PRINCESS_TOWER_WIDTH, height: PRINCESS_TOWER_HEIGHT, range: TOWER_RANGE, damage: PRINCESS_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: false, color: isPlayer ? '#5dade2' : '#ec7063', targets: ['air', 'ground'], isAttacking: false, attackAnimationEndTime: 0 };
+            const princessRight = { id: isPlayer ? 'player_pright' : 'enemy_pright', x: kingX + (isPlayer ? princessXOffset : -princessXOffset), y: kingY + princessYOffset, hp: PRINCESS_TOWER_HP, maxHp: PRINCESS_TOWER_HP, width: PRINCESS_TOWER_WIDTH, height: PRINCESS_TOWER_HEIGHT, range: TOWER_RANGE, damage: PRINCESS_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: false, color: isPlayer ? '#5dade2' : '#ec7063', targets: ['air', 'ground'], isAttacking: false, attackAnimationEndTime: 0 };
             return [princessLeft, kingTower, princessRight];
         }
 
         // --- Utilities ---
         function distance(x1, y1, x2, y2) { return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2)); }
-        function isGroundUnit(unit) { return !unit?.stats?.isAir; } // Helper to check if unit is ground
+        function isGroundUnit(unit) { return !unit?.stats?.isAir; }
 
         // --- Drawing ---
-        function drawTower(tower) { /* ... (no changes) ... */
+        // --- *** MODIFIED: drawTower includes attack animation *** ---
+        function drawTower(tower) {
              if (!ctx || !tower) return;
              if (tower.hp > 0) {
                  const heightModifier = tower.isKingTower ? 1 : 0.8; const widthModifier = tower.isKingTower ? 1 : 0.9;
                  const actualHeight = tower.height * heightModifier; const actualWidth = tower.width * widthModifier;
                  const healthBarY = tower.y - actualHeight / 2 - 15; const healthBarHeight = 10;
-                 ctx.fillStyle = tower.color; ctx.fillRect(tower.x, tower.y - actualHeight / 2, actualWidth, actualHeight);
+
+                 // Base tower
+                 ctx.fillStyle = tower.color;
+                 ctx.fillRect(tower.x, tower.y - actualHeight / 2, actualWidth, actualHeight);
+
+                 // Decorative top
                  ctx.fillStyle = lightenColor(tower.color, 20);
                  if (tower.isKingTower) { ctx.fillRect(tower.x + actualWidth * 0.1, tower.y - actualHeight / 2, actualWidth * 0.8, 10); }
                   else { ctx.beginPath(); ctx.moveTo(tower.x, tower.y - actualHeight / 2); ctx.lineTo(tower.x + actualWidth / 2, tower.y - actualHeight / 2 - 10); ctx.lineTo(tower.x + actualWidth, tower.y - actualHeight / 2); ctx.closePath(); ctx.fill(); }
+
+                 // --- Attack Animation (Flash) ---
+                 if (tower.isAttacking) {
+                     ctx.fillStyle = 'rgba(255, 255, 0, 0.7)'; // Yellow flash
+                     ctx.beginPath();
+                     ctx.arc(tower.x + actualWidth / 2, tower.y - actualHeight / 2, 5, 0, Math.PI * 2); // Flash at top center
+                     ctx.fill();
+                 }
+                 // --- End Attack Animation ---
+
+                 // Health Bar & Text
                  drawHealthBar(tower.x, healthBarY, actualWidth, healthBarHeight, tower.hp, tower.maxHp, true, tower.color === (playerTowers[1]?.color || '#3498db'));
                  const hpText = Math.max(0, Math.round(tower.hp)); const textX = tower.x + actualWidth / 2; const textY = healthBarY - 4;
                  ctx.fillStyle = '#FFFFFF'; ctx.strokeStyle = '#000000'; ctx.lineWidth = 2;
@@ -313,49 +332,280 @@
             ctx.fillStyle = lightenColor(rubbleColor, -20);
             ctx.fillRect(x + width * 0.5, baseY - pieceSize * 0.5, pieceSize, pieceSize * 0.7);
         }
-        function drawUnit(unit) { /* ... (no changes) ... */
+
+        // --- *** MODIFIED: drawUnit uses specific drawing logic per type *** ---
+        function drawUnit(unit) {
             if (!ctx || !unit || !unit.stats || typeof unit.maxHp === 'undefined') return;
-            ctx.fillStyle = unit.color;
-            ctx.beginPath();
-            const shape = unit.stats.shape || 'square';
+
             const size = unit.stats.size || 15;
-            switch (shape) {
-                case 'circle': ctx.arc(unit.x, unit.y, size / 2, 0, Math.PI * 2); ctx.fill(); break;
-                case 'diamond': ctx.moveTo(unit.x, unit.y - size / 2); ctx.lineTo(unit.x + size / 2, unit.y); ctx.lineTo(unit.x, unit.y + size / 2); ctx.lineTo(unit.x - size / 2, unit.y); ctx.closePath(); ctx.fill(); break;
-                case 'square': default: ctx.fillRect(unit.x - size / 2, unit.y - size / 2, size, size); break;
+            const halfSize = size / 2;
+            const x = unit.x;
+            const y = unit.y;
+            const color = unit.color;
+
+            ctx.save(); // Save context for potential transformations or color changes
+            ctx.translate(x, y); // Move origin to unit center for easier drawing
+
+            // --- Specific Drawing Logic per Unit Type ---
+            switch (unit.type) {
+                case 'knight':
+                    // Body (rectangle)
+                    ctx.fillStyle = color;
+                    ctx.fillRect(-halfSize * 0.6, -halfSize * 0.8, size * 1.2, size * 1.6);
+                    // Head (circle)
+                    ctx.fillStyle = lightenColor(color, 20); // Lighter color for helmet
+                    ctx.beginPath();
+                    ctx.arc(0, -halfSize * 0.9, halfSize * 0.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Sword (line) - changes position when attacking
+                    ctx.strokeStyle = '#FFFFFF'; // White sword
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(halfSize * 0.5, -halfSize * 0.2); // Hilt position
+                    if (unit.isAttacking) {
+                        ctx.lineTo(halfSize * 1.5, -halfSize * 0.8); // Attacking pose (angled up)
+                    } else {
+                        ctx.lineTo(halfSize * 1.2, halfSize * 0.8); // Idle pose (down)
+                    }
+                    ctx.stroke();
+                    break;
+
+                case 'archer':
+                    // Body (rectangle)
+                    ctx.fillStyle = color; // Green
+                    ctx.fillRect(-halfSize * 0.5, -halfSize * 0.7, size, size * 1.4);
+                    // Head (circle)
+                    ctx.fillStyle = lightenColor(color, 30);
+                    ctx.beginPath();
+                    ctx.arc(0, -halfSize * 0.8, halfSize * 0.4, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Bow (arc)
+                    ctx.strokeStyle = '#8B4513'; // Brown bow
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(halfSize * 0.3, 0, halfSize * 0.8, Math.PI * 0.6, Math.PI * 1.4);
+                    ctx.stroke();
+                    // Attack Animation (Arrow flash)
+                    if (unit.isAttacking) {
+                        ctx.fillStyle = 'yellow';
+                        ctx.beginPath();
+                        ctx.moveTo(halfSize * 0.5, 0);
+                        ctx.lineTo(halfSize * 1.5, 0); // Simple line for arrow
+                        ctx.lineTo(halfSize * 1.3, -2);
+                        ctx.moveTo(halfSize * 1.5, 0);
+                        ctx.lineTo(halfSize * 1.3, 2);
+                        ctx.fill();
+                    }
+                    break;
+
+                 case 'skeletons':
+                    // Simple representation: circle head, line body
+                    ctx.fillStyle = color; // White/Gray
+                    ctx.beginPath();
+                    ctx.arc(0, -halfSize * 0.5, halfSize * 0.4, 0, Math.PI * 2); // Head
+                    ctx.fill();
+                    ctx.fillRect(-1, -halfSize * 0.2, 2, size * 0.8); // Body
+                    // Attack Animation (Maybe flash color?)
+                    if (unit.isAttacking) {
+                        ctx.fillStyle = 'rgba(255, 0, 0, 0.5)'; // Red flash
+                        ctx.fill(); // Redraw body with flash
+                    }
+                    break;
+
+                 case 'bats':
+                     // Diamond shape for body, triangle wings
+                     ctx.fillStyle = color; // Purple
+                     // Body
+                     ctx.beginPath();
+                     ctx.moveTo(0, -halfSize * 0.6);
+                     ctx.lineTo(halfSize * 0.5, 0);
+                     ctx.lineTo(0, halfSize * 0.6);
+                     ctx.lineTo(-halfSize * 0.5, 0);
+                     ctx.closePath();
+                     ctx.fill();
+                     // Wings
+                     ctx.beginPath();
+                     ctx.moveTo(-halfSize * 0.4, -halfSize * 0.1);
+                     ctx.lineTo(-halfSize * 1.2, -halfSize * 0.5);
+                     ctx.lineTo(-halfSize * 1.0, halfSize * 0.2);
+                     ctx.closePath();
+                     ctx.fill();
+                     ctx.beginPath();
+                     ctx.moveTo(halfSize * 0.4, -halfSize * 0.1);
+                     ctx.lineTo(halfSize * 1.2, -halfSize * 0.5);
+                     ctx.lineTo(halfSize * 1.0, halfSize * 0.2);
+                     ctx.closePath();
+                     ctx.fill();
+                     // Attack Animation (Flash)
+                     if (unit.isAttacking) {
+                        ctx.fillStyle = 'rgba(255, 255, 0, 0.6)'; // Yellow flash
+                        ctx.beginPath();
+                        ctx.arc(0, 0, halfSize * 0.5, 0, Math.PI * 2);
+                        ctx.fill();
+                     }
+                     break;
+
+                case 'hogrider':
+                    // Hog body (rectangle)
+                    ctx.fillStyle = '#A9A9A9'; // Grey hog
+                    ctx.fillRect(-halfSize * 0.8, 0, size * 1.6, size * 0.8);
+                    // Rider body (smaller rectangle on top)
+                    ctx.fillStyle = color; // Orange rider
+                    ctx.fillRect(-halfSize * 0.4, -halfSize * 1.2, size * 0.8, size * 1.2);
+                    // Rider head
+                    ctx.fillStyle = lightenColor(color, 20);
+                    ctx.beginPath();
+                    ctx.arc(0, -halfSize * 1.3, halfSize * 0.3, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Hammer (line) - changes angle when attacking
+                    ctx.strokeStyle = '#696969'; // Dark grey hammer handle
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(halfSize * 0.3, -halfSize * 0.5);
+                    if (unit.isAttacking) {
+                        ctx.lineTo(halfSize * 1.0, halfSize * 1.0); // Attacking pose (swing down)
+                        // Hammer head
+                        ctx.fillStyle = '#808080';
+                        ctx.fillRect(halfSize*0.8, halfSize*0.8, halfSize*0.5, halfSize*0.5);
+                    } else {
+                        ctx.lineTo(halfSize * 0.8, -halfSize * 1.0); // Idle pose (raised)
+                         // Hammer head
+                        ctx.fillStyle = '#808080';
+                        ctx.fillRect(halfSize*0.6, -halfSize*1.2, halfSize*0.5, halfSize*0.5);
+                    }
+                    ctx.stroke();
+                    break;
+
+                // Add cases for other implemented units (melee, tank, assassin)
+                // using similar drawing logic (rectangles, circles, lines)
+
+                case 'melee': // Mini Pekka
+                    ctx.fillStyle = color; // Blue
+                    ctx.fillRect(-halfSize * 0.7, -halfSize * 0.9, size * 1.4, size * 1.8); // Body
+                    // Horns
+                    ctx.fillStyle = lightenColor(color, 30);
+                    ctx.beginPath(); ctx.moveTo(-halfSize*0.3, -halfSize*0.9); ctx.lineTo(-halfSize*0.5, -halfSize*1.3); ctx.lineTo(-halfSize*0.1, -halfSize*1.1); ctx.fill();
+                    ctx.beginPath(); ctx.moveTo(halfSize*0.3, -halfSize*0.9); ctx.lineTo(halfSize*0.5, -halfSize*1.3); ctx.lineTo(halfSize*0.1, -halfSize*1.1); ctx.fill();
+                    // Sword
+                    ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(halfSize * 0.6, -halfSize * 0.2);
+                    if (unit.isAttacking) { ctx.lineTo(halfSize * 1.6, -halfSize * 0.2); } // Attack pose (forward)
+                    else { ctx.lineTo(halfSize * 1.3, halfSize * 0.9); } // Idle pose (down)
+                    ctx.stroke();
+                    break;
+
+                case 'tank': // Giant
+                    ctx.fillStyle = color; // Grey
+                    ctx.fillRect(-halfSize, -halfSize, size, size); // Large square
+                    // Fists (circles) - move forward when attacking
+                    ctx.fillStyle = lightenColor(color, 10);
+                    const fistOffset = unit.isAttacking ? halfSize * 0.6 : halfSize * 0.4;
+                    ctx.beginPath(); ctx.arc(fistOffset, halfSize * 0.3, halfSize * 0.3, 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(fistOffset, -halfSize * 0.3, halfSize * 0.3, 0, Math.PI * 2); ctx.fill();
+                    break;
+
+                case 'assassin': // Bandit
+                     // Diamond shape
+                     ctx.fillStyle = color; // Purple
+                     ctx.beginPath();
+                     ctx.moveTo(0, -halfSize); ctx.lineTo(halfSize, 0); ctx.lineTo(0, halfSize); ctx.lineTo(-halfSize, 0);
+                     ctx.closePath(); ctx.fill();
+                     // Mask/Eyes?
+                     ctx.fillStyle = lightenColor(color, 30);
+                     ctx.fillRect(-halfSize*0.3, -halfSize*0.4, halfSize*0.6, halfSize*0.3);
+                     // Attack flash
+                     if (unit.isAttacking) {
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'; // White flash
+                        ctx.beginPath(); ctx.arc(halfSize * 0.8, 0, halfSize * 0.4, 0, Math.PI * 2); ctx.fill();
+                     }
+                     break;
+
+                default: // Fallback to original shape if type not recognized
+                    const shape = unit.stats.shape || 'square';
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    switch (shape) {
+                        case 'circle': ctx.arc(0, 0, halfSize, 0, Math.PI * 2); ctx.fill(); break;
+                        case 'diamond': ctx.moveTo(0, -halfSize); ctx.lineTo(halfSize, 0); ctx.lineTo(0, halfSize); ctx.lineTo(-halfSize, 0); ctx.closePath(); ctx.fill(); break;
+                        case 'square': default: ctx.fillRect(-halfSize, -halfSize, size, size); break;
+                    }
+                    break;
             }
-            drawHealthBar(unit.x - size / 2, unit.y - size / 2 - 10, size, 5, unit.hp, unit.maxHp);
+
+            ctx.restore(); // Restore context
+
+            // Draw health bar above the unit (outside the translated context)
+            drawHealthBar(x - halfSize, y - size - 5, size, 5, unit.hp, unit.maxHp); // Adjusted Y position for health bar
         }
-        function drawBuilding(building) { /* ... (no changes) ... */
+
+        // --- *** MODIFIED: drawBuilding includes attack animation *** ---
+        function drawBuilding(building) {
             if (!ctx || !building || !building.stats) return;
             const size = building.stats.size || 40;
-            const healthBarY = building.y - size / 2 - 15;
+            const halfSize = size / 2;
+            const healthBarY = building.y - halfSize - 15; // Position health bar above
             const healthBarHeight = 8;
+
+            // Base (simple square)
             ctx.fillStyle = building.color;
-            ctx.fillRect(building.x - size / 2, building.y - size / 2, size, size);
+            ctx.fillRect(building.x - halfSize, building.y - halfSize, size, size);
+
+            // Cannon Barrel
             ctx.fillStyle = lightenColor(building.color, -20);
             const barrelWidth = size * 0.2;
             const barrelLength = size * 0.4;
             const barrelX = building.x - barrelWidth / 2;
-            const barrelY = building.y - size / 2 - barrelLength;
+            // Point barrel slightly upwards
+            const barrelY = building.y - halfSize - barrelLength + 5; // Adjusted Y
             ctx.fillRect(barrelX, barrelY, barrelWidth, barrelLength);
-            drawHealthBar(building.x - size / 2, healthBarY, size, healthBarHeight, building.hp, building.maxHp);
+
+             // --- Attack Animation (Flash) ---
+             if (building.isAttacking) {
+                 ctx.fillStyle = 'rgba(255, 255, 0, 0.8)'; // Yellow flash
+                 ctx.beginPath();
+                 ctx.arc(building.x, barrelY, 5, 0, Math.PI * 2); // Flash at barrel tip
+                 ctx.fill();
+             }
+             // --- End Attack Animation ---
+
+            // Draw health bar
+            drawHealthBar(building.x - halfSize, healthBarY, size, healthBarHeight, building.hp, building.maxHp);
         }
-        function drawLogProjectile(log) { /* ... (no changes) ... */
+
+        // --- *** MODIFIED: drawLogProjectile with more texture *** ---
+        function drawLogProjectile(log) {
             if (!ctx || !log) return;
             const width = log.stats.width;
             const length = 60; // Visual length of the log
-            const angle = log.direction === 1 ? 0 : Math.PI;
-            ctx.save(); ctx.translate(log.x, log.y); ctx.rotate(angle);
-            ctx.fillStyle = log.color || '#8B4513';
+            const angle = log.direction === 1 ? 0 : Math.PI; // Rotation based on direction
+
+            ctx.save(); // Save context state
+            ctx.translate(log.x, log.y); // Move origin to log center
+
+            // Draw log body (brown rectangle)
+            ctx.fillStyle = log.color || '#8B4513'; // Brown
             ctx.fillRect(-length / 2, -width / 2, length, width);
-            ctx.fillStyle = lightenColor(log.color || '#8B4513', -20);
-            for (let i = 0; i < 3; i++) {
-                ctx.fillRect(-length / 2 + i * (length/3), -width/2 - 2, length/4, 4);
-                ctx.fillRect(-length / 2 + i * (length/3) + 5, width/2 -2, length/4, 4);
+
+            // Draw "bark" texture lines
+            ctx.strokeStyle = lightenColor(log.color || '#8B4513', -30); // Darker brown lines
+            ctx.lineWidth = 1;
+            for (let i = -length / 2 + 5; i < length / 2; i += 8) {
+                ctx.beginPath();
+                ctx.moveTo(i, -width / 2);
+                ctx.lineTo(i + Math.random()*4-2, width / 2); // Jagged lines
+                ctx.stroke();
             }
-            ctx.restore();
+
+             // Draw "spikes" or texture
+             ctx.fillStyle = lightenColor(log.color || '#8B4513', -20);
+             for (let i = 0; i < 3; i++) {
+                 ctx.fillRect(-length / 2 + i * (length/3) + 5, -width/2 - 2, length/6, 4); // Top spikes
+                 ctx.fillRect(-length / 2 + i * (length/3) + 10, width/2 -2, length/6, 4); // Bottom spikes
+             }
+
+
+            ctx.restore(); // Restore context state
         }
+
         function drawHealthBar(x, y, width, height, currentHp, maxHp, isTowerBar = false, isPlayerTower = false) { /* ... (no changes) ... */
              if (!ctx) return; const validMaxHp = Math.max(1, maxHp); const hpPercent = Math.max(0, currentHp) / validMaxHp;
              ctx.fillStyle = isTowerBar ? '#7f8c8d' : '#e74c3c'; ctx.fillRect(x, y, width, height);
@@ -546,72 +796,25 @@
              canvas.removeEventListener('mousemove', updateTargetingIndicator);
              updateBattleButtons();
         }
-
-        // --- *** MODIFIED: executeSpellEffect with Log Y-position Fix *** ---
-        function executeSpellEffect(spellId, x, y) { // x, y are click coordinates
-            const spellCard = getCardById(spellId);
-            if (!spellCard || spellCard.type !== 'spell') return;
-
+        function executeSpellEffect(spellId, x, y) { /* ... (no changes) ... */
+            const spellCard = getCardById(spellId); if (!spellCard || spellCard.type !== 'spell') return;
             console.log(`%cExecuting ${spellId} effect at (${x.toFixed(0)}, ${y.toFixed(0)})`, "color: orange; font-weight: bold;");
-
             if (spellId === 'fireball') {
-                const radius = spellCard.stats.radius;
-                const damage = spellCard.stats.damage;
-                const canTargetAir = spellCard.stats.targets?.includes('air');
-                const canTargetGround = spellCard.stats.targets?.includes('ground');
-
-                // Visual effect
+                const radius = spellCard.stats.radius; const damage = spellCard.stats.damage;
+                const canTargetAir = spellCard.stats.targets?.includes('air'); const canTargetGround = spellCard.stats.targets?.includes('ground');
                 attackEffects.push({ type: 'explosion', x: x, y: y, radius: radius, duration: 400, startTime: Date.now(), color: 'rgba(255, 100, 0, 0.8)' });
-
-                // Apply damage to enemies
-                const targetsToCheck = [...enemyUnits, ...enemyTowers, ...enemyBuildings]; // Include buildings
+                const targetsToCheck = [...enemyUnits, ...enemyTowers, ...enemyBuildings];
                 targetsToCheck.forEach(target => {
-                    if (!target || target.hp <= 0) return;
-                    // Check target type (air/ground) compatibility
-                    const targetIsAir = target.stats?.isAir;
-                    if (targetIsAir && !canTargetAir) return;
-                    if (!targetIsAir && !canTargetGround) return;
-
-                    const targetCenterX = target.x + (target.isTower || target.isBuilding ? target.width / 2 : 0);
-                    const targetCenterY = target.y;
-                    const dist = distance(x, y, targetCenterX, targetCenterY);
-
-                    if (dist <= radius) {
-                        console.log(`   -> ${spellId} HIT ${target.isTower ? 'tower' : target.isBuilding ? 'building' : target.type || 'unit'} (ID: ${target.id}) at distance ${dist.toFixed(1)}. HP before: ${target.hp.toFixed(0)}`);
-                        target.hp -= damage;
-                        console.log(`   -> HP after: ${target.hp.toFixed(0)}`);
-                        attackEffects.push({ type: 'flash', x: targetCenterX, y: targetCenterY, radius: (target.width || target.stats?.size || 10) * 0.3, duration: 150, startTime: Date.now() });
-                    }
+                    if (!target || target.hp <= 0) return; const targetIsAir = target.stats?.isAir; if (targetIsAir && !canTargetAir) return; if (!targetIsAir && !canTargetGround) return;
+                    const targetCenterX = target.x + (target.isTower || target.isBuilding ? target.width / 2 : 0); const targetCenterY = target.y; const dist = distance(x, y, targetCenterX, targetCenterY);
+                    if (dist <= radius) { /* ... damage logic ... */ target.hp -= damage; attackEffects.push({ type: 'flash', x: targetCenterX, y: targetCenterY, radius: (target.width || target.stats?.size || 10) * 0.3, duration: 150, startTime: Date.now() }); }
                 });
-
             } else if (spellId === 'log') {
-                // Create a Log projectile instance
-                const logStats = spellCard.stats;
-                const startX = 0; // Start from player side edge
-
-                // --- FIX: Set Y coordinate to the center of the canvas ---
-                const logYPosition = canvas.height / 2;
-                // --- End Fix ---
-
-                logProjectiles.push({
-                    id: `log_${Date.now()}`,
-                    x: startX,
-                    // y: y, // OLD: Used click Y coordinate, which was incorrect based on logs
-                    y: logYPosition, // NEW: Use the calculated center Y position
-                    startX: startX,
-                    stats: logStats,
-                    color: 'var(--log-color)',
-                    direction: 1, // Player's log always moves right
-                    startTime: Date.now(),
-                    hitTargets: [] // Keep track of targets already hit by this log
-                });
-                // AI Log would start from other side (x=canvas.width), direction -1, y also canvas.height/2
+                const logStats = spellCard.stats; const startX = 0; const logYPosition = canvas.height / 2;
+                logProjectiles.push({ id: `log_${Date.now()}`, x: startX, y: logYPosition, startX: startX, stats: logStats, color: 'var(--log-color)', direction: 1, startTime: Date.now(), hitTargets: [] });
             }
-
-            updateDisplays();
-            cleanupDeadUnits(); // Includes buildings now
+            updateDisplays(); cleanupDeadUnits();
         }
-
 
         // --- Building Placement Logic ---
         function startBuildingPlacement(buildingId) { /* ... (no changes) ... */
@@ -675,30 +878,62 @@
             aiElixir = Math.min(MAX_ELIXIR, aiElixir + ELIXIR_REGEN_RATE);
             updateDisplays(); updateBattleButtons();
         }
-        function deployUnit(cardId, isPlayer) { /* ... (no changes) ... */
-             const card = getCardById(cardId); if (!card || card.type !== 'unit') { console.error("Invalid unit type for deployment:", cardId); return; }
+        // --- *** MODIFIED: deployUnit adds attack state properties *** ---
+        function deployUnit(cardId, isPlayer) {
+             const card = getCardById(cardId);
+             if (!card || card.type !== 'unit') { console.error("Invalid unit type for deployment:", cardId); return; }
+
              const kingTower = isPlayer ? playerTowers[1] : enemyTowers[1];
              const spawnXBase = kingTower.x + (isPlayer ? kingTower.width + 20 : -20 - (card.stats.size || card.stats.unitStats?.size || 15));
              const spawnYBase = kingTower.y + (Math.random() * 80 - 40);
-             if (card.stats.spawnCount && card.stats.unitStats) {
+
+             const addAttackState = (obj) => {
+                 obj.isAttacking = false;
+                 obj.attackAnimationEndTime = 0;
+                 return obj;
+             };
+
+             if (card.stats.spawnCount && card.stats.unitStats) { // Multi-spawn
                  const unitStats = card.stats.unitStats; const spawnCount = card.stats.spawnCount; const enemyColor = ENEMY_COLORS[cardId] || '#FFFFFF';
                  for (let i = 0; i < spawnCount; i++) {
                      const spawnYOffset = (Math.random() - 0.5) * 30 * spawnCount; const spawnXOffset = (Math.random() - 0.5) * 10;
-                     const newUnit = { id: `${cardId}_${Date.now()}_${Math.random()}_${i}`, type: cardId, stats: { ...unitStats }, x: spawnXBase + spawnXOffset, y: spawnYBase + spawnYOffset, isPlayer: isPlayer, hp: unitStats.hp, maxHp: unitStats.maxHp, color: isPlayer ? unitStats.color : enemyColor, target: null, lastAttackTime: 0, };
+                     let newUnit = { id: `${cardId}_${Date.now()}_${Math.random()}_${i}`, type: cardId, stats: { ...unitStats }, x: spawnXBase + spawnXOffset, y: spawnYBase + spawnYOffset, isPlayer: isPlayer, hp: unitStats.hp, maxHp: unitStats.maxHp, color: isPlayer ? unitStats.color : enemyColor, target: null, lastAttackTime: 0, };
+                     newUnit = addAttackState(newUnit); // Add attack state
                      if (isPlayer) playerUnits.push(newUnit); else enemyUnits.push(newUnit);
                  }
-             } else {
+             } else { // Single-spawn
                  const stats = card.stats; const enemyColor = ENEMY_COLORS[cardId] || '#FFFFFF';
-                 const newUnit = { id: `${cardId}_${Date.now()}_${Math.random()}`, type: cardId, stats: { ...stats }, x: spawnXBase, y: spawnYBase, isPlayer: isPlayer, hp: stats.hp, maxHp: stats.maxHp, color: isPlayer ? stats.color : enemyColor, target: null, lastAttackTime: 0, };
+                 let newUnit = { id: `${cardId}_${Date.now()}_${Math.random()}`, type: cardId, stats: { ...stats }, x: spawnXBase, y: spawnYBase, isPlayer: isPlayer, hp: stats.hp, maxHp: stats.maxHp, color: isPlayer ? stats.color : enemyColor, target: null, lastAttackTime: 0, };
+                 newUnit = addAttackState(newUnit); // Add attack state
                  if (isPlayer) playerUnits.push(newUnit); else enemyUnits.push(newUnit);
              }
              console.log(`${isPlayer ? 'Player' : 'AI'} deployed ${card.name}`);
          }
-        function deployBuilding(cardId, isPlayer, x, y) { /* ... (no changes) ... */
-            const card = getCardById(cardId); if (!card || card.type !== 'building') { console.error("Invalid building type for deployment:", cardId); return; }
-            const stats = card.stats; const enemyColor = ENEMY_COLORS[cardId] || '#FFFFFF';
-            const newBuilding = { id: `${cardId}_${Date.now()}_${Math.random()}`, type: cardId, stats: { ...stats }, x: x, y: y, isPlayer: isPlayer, hp: stats.hp, maxHp: stats.maxHp, color: isPlayer ? stats.color : enemyColor, target: null, lastAttackTime: 0, spawnTime: Date.now(), isBuilding: true, width: stats.size, height: stats.size };
-            if (isPlayer) { playerBuildings.push(newBuilding); } else { enemyBuildings.push(newBuilding); }
+        // --- *** MODIFIED: deployBuilding adds attack state properties *** ---
+        function deployBuilding(cardId, isPlayer, x, y) {
+            const card = getCardById(cardId);
+            if (!card || card.type !== 'building') { console.error("Invalid building type for deployment:", cardId); return; }
+
+            const stats = card.stats;
+            const enemyColor = ENEMY_COLORS[cardId] || '#FFFFFF';
+            const newBuilding = {
+                id: `${cardId}_${Date.now()}_${Math.random()}`,
+                type: cardId,
+                stats: { ...stats },
+                x: x, y: y,
+                isPlayer: isPlayer,
+                hp: stats.hp, maxHp: stats.maxHp,
+                color: isPlayer ? stats.color : enemyColor,
+                target: null, lastAttackTime: 0,
+                spawnTime: Date.now(),
+                isBuilding: true,
+                width: stats.size, height: stats.size,
+                isAttacking: false, // Add attack state
+                attackAnimationEndTime: 0 // Add attack state
+            };
+
+            if (isPlayer) { playerBuildings.push(newBuilding); }
+            else { enemyBuildings.push(newBuilding); }
             console.log(`${isPlayer ? 'Player' : 'AI'} deployed building ${card.name}`);
         }
 
@@ -753,142 +988,184 @@
              });
              return closestTarget;
          }
-        function updateUnits(units, enemyUnitsList, enemyTowersList, enemyBuildingsList) { /* ... (no changes) ... */
-            if (isTiebreakerActive) return; const currentTime = Date.now();
+
+        // --- *** MODIFIED: updateUnits sets attack state *** ---
+        function updateUnits(units, enemyUnitsList, enemyTowersList, enemyBuildingsList) {
+            if (isTiebreakerActive) return;
+            const currentTime = Date.now();
+
             for (let i = units.length - 1; i >= 0; i--) {
-                const unit = units[i]; if (!unit || unit.hp <= 0 || !unit.stats) continue;
+                const unit = units[i];
+                 if (!unit || unit.hp <= 0 || !unit.stats) continue;
+
+                // Reset attack state if animation time ended
+                if (unit.isAttacking && currentTime > unit.attackAnimationEndTime) {
+                    unit.isAttacking = false;
+                }
+
+                // Handle Pushback
                 if (unit.isPushedBack && currentTime < unit.pushbackEndTime) {
                     unit.x += unit.pushbackVelocityX; unit.y += unit.pushbackVelocityY;
                     unit.x = Math.max(unit.stats.size / 2, Math.min(canvas.width - unit.stats.size / 2, unit.x));
-                    unit.y = Math.max(unit.stats.size / 2, Math.min(canvas.height - unit.stats.size / 2, unit.y)); continue;
-                } else if (unit.isPushedBack) { unit.isPushedBack = false; }
-                 let targetNeedsUpdate = !unit.target || unit.target.hp <= 0; if (targetNeedsUpdate) { unit.target = findTarget(unit, enemyUnitsList, enemyTowersList, enemyBuildingsList); }
-                let isAttacking = false;
+                    unit.y = Math.max(unit.stats.size / 2, Math.min(canvas.height - unit.stats.size / 2, unit.y));
+                    continue; // Skip normal logic while being pushed back
+                } else if (unit.isPushedBack) {
+                    unit.isPushedBack = false; // Pushback finished
+                }
+
+                 // Targeting
+                 let targetNeedsUpdate = !unit.target || unit.target.hp <= 0;
+                 if (targetNeedsUpdate) {
+                     unit.target = findTarget(unit, enemyUnitsList, enemyTowersList, enemyBuildingsList);
+                 }
+
+                // Attacking
+                let performedAttackThisFrame = false; // Use local flag to avoid setting isAttacking=false immediately
                 if (unit.target) {
                     const targetWidth = unit.target.width || (unit.target.stats ? unit.target.stats.size : 0);
-                    const targetCenterX = unit.target.x + (targetWidth / 2); const targetCenterY = unit.target.y;
+                    const targetCenterX = unit.target.x + (targetWidth / 2);
+                    const targetCenterY = unit.target.y;
                     const distToTarget = distance(unit.x, unit.y, targetCenterX, targetCenterY);
+
                     if (distToTarget <= unit.stats.range) {
-                        isAttacking = true;
+                        performedAttackThisFrame = true; // Assume attacking if in range
                         if (currentTime - unit.lastAttackTime >= unit.stats.attackSpeed) {
-                             if (unit.stats.range > 30) { /* Ranged Attack */ projectiles.push({ x: unit.x, y: unit.y, target: unit.target, speed: 5, damage: unit.stats.damage, color: unit.color, size: 5, isPlayerProjectile: unit.isPlayer }); attackEffects.push({ type: 'flash', x: unit.x, y: unit.y, radius: unit.stats.size / 3, duration: 100, startTime: currentTime }); }
-                             else { /* Melee Attack */ unit.target.hp -= unit.stats.damage; const angleToTarget = Math.atan2(targetCenterY - unit.y, targetCenterX - unit.x); const slashLength = unit.stats.size * 0.8; attackEffects.push({ type: 'slash', x1: unit.x + Math.cos(angleToTarget - Math.PI / 6) * unit.stats.size * 0.4, y1: unit.y + Math.sin(angleToTarget - Math.PI / 6) * unit.stats.size * 0.4, x2: unit.x + Math.cos(angleToTarget + Math.PI / 6) * slashLength, y2: unit.y + Math.sin(angleToTarget + Math.PI / 6) * slashLength, duration: 150, startTime: currentTime }); }
-                             unit.lastAttackTime = currentTime; if (unit.target.hp <= 0) { unit.target = null; isAttacking = false; }
+                             // --- Set Attack State ---
+                             unit.isAttacking = true;
+                             unit.attackAnimationEndTime = currentTime + ATTACK_ANIMATION_DURATION;
+                             // --- End Set Attack State ---
+
+                             if (unit.stats.range > 30) { // Ranged Attack
+                                 projectiles.push({ x: unit.x, y: unit.y, target: unit.target, speed: 5, damage: unit.stats.damage, color: unit.color, size: 5, isPlayerProjectile: unit.isPlayer });
+                                 // attackEffects.push({ type: 'flash', x: unit.x, y: unit.y, radius: unit.stats.size / 3, duration: 100, startTime: currentTime }); // Replaced by isAttacking visual
+                             } else { // Melee Attack
+                                 unit.target.hp -= unit.stats.damage;
+                                 // attackEffects.push({ type: 'slash', ... }); // Replaced by isAttacking visual
+                             }
+                             unit.lastAttackTime = currentTime;
+                             if (unit.target.hp <= 0) { unit.target = null; performedAttackThisFrame = false; } // Target died
                         }
-                    } else { unit.target = null; isAttacking = false; }
+                    } else {
+                         unit.target = null; // Target moved out of range
+                         performedAttackThisFrame = false;
+                     }
+                } else {
+                    performedAttackThisFrame = false; // No target
                 }
-                 if (!isAttacking) {
-                     let moveTarget = unit.target; if (!moveTarget) { moveTarget = findTarget(unit, enemyUnitsList, enemyTowersList, enemyBuildingsList); }
-                     if (moveTarget) { const targetCenterX = moveTarget.x + (moveTarget.width ? moveTarget.width / 2 : 0); const angle = Math.atan2(moveTarget.y - unit.y, targetCenterX - unit.x); unit.x += Math.cos(angle) * unit.stats.speed; unit.y += Math.sin(angle) * unit.stats.speed; }
-                     else { const direction = unit.isPlayer ? 1 : -1; unit.x += unit.stats.speed * direction; }
+
+                 // Movement
+                 if (!performedAttackThisFrame) { // Only move if not in range or attack on cooldown
+                     let moveTarget = unit.target;
+                     if (!moveTarget) { moveTarget = findTarget(unit, enemyUnitsList, enemyTowersList, enemyBuildingsList); }
+
+                     if (moveTarget) {
+                         const targetCenterX = moveTarget.x + (moveTarget.width ? moveTarget.width / 2 : 0);
+                         const angle = Math.atan2(moveTarget.y - unit.y, targetCenterX - unit.x);
+                         unit.x += Math.cos(angle) * unit.stats.speed;
+                         unit.y += Math.sin(angle) * unit.stats.speed;
+                     } else {
+                         const direction = unit.isPlayer ? 1 : -1;
+                         unit.x += unit.stats.speed * direction;
+                     }
                  }
+
+                 // Boundary checks
                  unit.x = Math.max(unit.stats.size / 2, Math.min(canvas.width - unit.stats.size / 2, unit.x));
                  unit.y = Math.max(unit.stats.size / 2, Math.min(canvas.height - unit.stats.size / 2, unit.y));
             }
         }
-         function updateTowers(towers, enemyUnitsList, enemyBuildingsList) { /* ... (no changes) ... */
-             if (isTiebreakerActive) return; const currentTime = Date.now();
+
+        // --- *** MODIFIED: updateTowers sets attack state *** ---
+         function updateTowers(towers, enemyUnitsList, enemyBuildingsList) {
+             if (isTiebreakerActive) return;
+             const currentTime = Date.now();
              towers.forEach(tower => {
+                 // Reset attack state if animation time ended
+                 if (tower.isAttacking && currentTime > tower.attackAnimationEndTime) {
+                     tower.isAttacking = false;
+                 }
+
                  if (tower.hp > 0) {
                      const target = findTowerTarget(tower, enemyUnitsList, enemyBuildingsList);
                      if (target && currentTime - tower.lastAttackTime >= tower.attackSpeed) {
+                         // --- Set Attack State ---
+                         tower.isAttacking = true;
+                         tower.attackAnimationEndTime = currentTime + ATTACK_ANIMATION_DURATION;
+                         // --- End Set Attack State ---
+
                          const projectileStartX = tower.x + tower.width / 2;
                          projectiles.push({ x: projectileStartX, y: tower.y, target: target, speed: 6, damage: tower.damage, color: tower.color, size: 6, isPlayerProjectile: tower.color === playerTowers[1].color });
-                         tower.lastAttackTime = currentTime; attackEffects.push({ type: 'flash', x: projectileStartX, y: tower.y, radius: 4, duration: 100, startTime: currentTime });
+                         tower.lastAttackTime = currentTime;
+                         // attackEffects.push({ type: 'flash', x: projectileStartX, y: tower.y, radius: 4, duration: 100, startTime: currentTime }); // Replaced by isAttacking visual
                      }
                  }
              });
          }
-         function updateBuildings(buildings, enemyUnitsList) { /* ... (no changes) ... */
-             if (isTiebreakerActive) return; const currentTime = Date.now();
+
+        // --- *** MODIFIED: updateBuildings sets attack state *** ---
+         function updateBuildings(buildings, enemyUnitsList) {
+             if (isTiebreakerActive) return;
+             const currentTime = Date.now();
              for (let i = buildings.length - 1; i >= 0; i--) {
-                 const building = buildings[i]; if (!building || building.hp <= 0) continue;
+                 const building = buildings[i];
+                 if (!building || building.hp <= 0) continue;
+
+                 // Reset attack state if animation time ended
+                 if (building.isAttacking && currentTime > building.attackAnimationEndTime) {
+                     building.isAttacking = false;
+                 }
+
+                 // Check lifetime
                  if (currentTime - building.spawnTime > building.stats.lifetime) {
                      building.hp = 0; console.log(`${building.type} ${building.id} expired.`);
-                     attackEffects.push({ type: 'flash', x: building.x, y: building.y, radius: building.stats.size / 2, duration: 300, startTime: currentTime }); continue;
+                     attackEffects.push({ type: 'flash', x: building.x, y: building.y, radius: building.stats.size / 2, duration: 300, startTime: currentTime });
+                     continue;
                  }
+
+                 // Targeting and Attacking
                  const target = findBuildingTarget(building, enemyUnitsList);
                  if (target && currentTime - building.lastAttackTime >= building.stats.attackSpeed) {
+                     // --- Set Attack State ---
+                     building.isAttacking = true;
+                     building.attackAnimationEndTime = currentTime + ATTACK_ANIMATION_DURATION;
+                     // --- End Set Attack State ---
+
                      const projectileStartX = building.x; const projectileStartY = building.y;
                      projectiles.push({ x: projectileStartX, y: projectileStartY, target: target, speed: 7, damage: building.stats.damage, color: building.color, size: 7, isPlayerProjectile: building.isPlayer });
-                     building.lastAttackTime = currentTime; attackEffects.push({ type: 'flash', x: projectileStartX, y: projectileStartY, radius: 5, duration: 100, startTime: currentTime });
+                     building.lastAttackTime = currentTime;
+                     // attackEffects.push({ type: 'flash', x: projectileStartX, y: projectileStartY, radius: 5, duration: 100, startTime: currentTime }); // Replaced by isAttacking visual
                  }
              }
          }
 
-        // --- *** MODIFIED: updateLogProjectiles Logic with DEBUG LOGS COMMENTED OUT *** ---
-        function updateLogProjectiles(logProjectilesList, enemyUnitsList, playerUnitsList) {
+        function updateLogProjectiles(logProjectilesList, enemyUnitsList, playerUnitsList) { /* ... (no changes, logs commented out) ... */
             if (isTiebreakerActive) return;
             const currentTime = Date.now();
-
             for (let i = logProjectilesList.length - 1; i >= 0; i--) {
-                const log = logProjectilesList[i];
-                if (!log) continue;
-
-                // Move the log
+                const log = logProjectilesList[i]; if (!log) continue;
                 log.x += log.stats.speed * log.direction;
-
-                // Check for collisions with ground units
                 const unitsToCheck = log.direction === 1 ? enemyUnitsList : playerUnitsList;
-                const logRect = {
-                    x: log.x - 30, // Visual length/2
-                    y: log.y - log.stats.width / 2,
-                    width: 60, // Visual length
-                    height: log.stats.width
-                };
-
+                const logRect = { x: log.x - 30, y: log.y - log.stats.width / 2, width: 60, height: log.stats.width };
                 unitsToCheck.forEach(unit => {
-                    // --- DIAGNOSTIC LOG 1 (Commented Out) ---
                     // console.log(`Log Check: Unit ${unit?.id} (${unit?.type}), HP=${unit?.hp}, isGround=${isGroundUnit(unit)}, alreadyHit=${log.hitTargets.includes(unit?.id)}`);
-
-                    if (!unit || unit.hp <= 0 || !isGroundUnit(unit) || log.hitTargets.includes(unit.id)) return; // Skip air, dead, or already hit units
-
-                    const unitRect = {
-                        x: unit.x - unit.stats.size / 2,
-                        y: unit.y - unit.stats.size / 2,
-                        width: unit.stats.size,
-                        height: unit.stats.size
-                    };
-
-                    // --- DIAGNOSTIC LOG 2 (Commented Out) ---
+                    if (!unit || unit.hp <= 0 || !isGroundUnit(unit) || log.hitTargets.includes(unit.id)) return;
+                    const unitRect = { x: unit.x - unit.stats.size / 2, y: unit.y - unit.stats.size / 2, width: unit.stats.size, height: unit.stats.size };
                     // console.log(`Log Collision Check: Log Rect (x:${logRect.x.toFixed(1)}, y:${logRect.y.toFixed(1)}, w:${logRect.width}, h:${logRect.height}) vs Unit ${unit.id} Rect (x:${unitRect.x.toFixed(1)}, y:${unitRect.y.toFixed(1)}, w:${unitRect.width}, h:${unitRect.height})`);
-
-                    // Simple AABB collision check
-                    if (logRect.x < unitRect.x + unitRect.width &&
-                        logRect.x + logRect.width > unitRect.x &&
-                        logRect.y < unitRect.y + unitRect.height &&
-                        logRect.y + logRect.height > unitRect.y)
-                    {
-                        // --- DIAGNOSTIC LOG 3 (Commented Out) ---
+                    if (logRect.x < unitRect.x + unitRect.width && logRect.x + logRect.width > unitRect.x && logRect.y < unitRect.y + unitRect.height && logRect.y + logRect.height > unitRect.y) {
                         // console.log(`%c!!! LOG HIT DETECTED: Log ${log.id} hit Unit ${unit.id} !!!`, "color: lime; font-weight: bold;");
-
-                        // Collision detected!
-                        unit.hp -= log.stats.damage; // Apply Damage
-                        log.hitTargets.push(unit.id); // Prevent hitting the same unit multiple times
-                        // console.log(`   -> Unit ${unit.id} HP after Log hit: ${unit.hp.toFixed(0)}`); // Keep this log maybe?
-
-                        // Apply pushback
-                        const pushbackAngle = Math.atan2(unit.y - log.y, unit.x - log.x); // Push away from log center
-                        const pushSpeed = log.stats.pushbackStrength;
-                        unit.isPushedBack = true;
-                        unit.pushbackEndTime = currentTime + log.stats.pushbackDuration;
-                        unit.pushbackVelocityX = Math.cos(pushbackAngle) * pushSpeed;
-                        unit.pushbackVelocityY = Math.sin(pushbackAngle) * pushSpeed;
-
-                        // Add hit flash
+                        unit.hp -= log.stats.damage; log.hitTargets.push(unit.id);
+                        const pushbackAngle = Math.atan2(unit.y - log.y, unit.x - log.x); const pushSpeed = log.stats.pushbackStrength;
+                        unit.isPushedBack = true; unit.pushbackEndTime = currentTime + log.stats.pushbackDuration;
+                        unit.pushbackVelocityX = Math.cos(pushbackAngle) * pushSpeed; unit.pushbackVelocityY = Math.sin(pushbackAngle) * pushSpeed;
                         attackEffects.push({ type: 'flash', x: unit.x, y: unit.y, radius: unit.stats.size / 2, duration: 150, startTime: currentTime });
                     }
                 });
-
-                // Remove log if it travels its distance or goes off-screen
                 const distanceTraveled = Math.abs(log.x - log.startX);
                 if (distanceTraveled >= log.stats.travelDistance || log.x < -logRect.width || log.x > canvas.width + logRect.width) {
                     logProjectilesList.splice(i, 1);
                 }
             }
         }
-
-
         function updateProjectiles() { /* ... (no changes) ... */
              if (isTiebreakerActive) return;
             for (let i = projectiles.length - 1; i >= 0; i--) {
@@ -1007,25 +1284,60 @@
         function showMessage(text) { /* ... (no changes) ... */ if(messageBox) { messageBox.textContent = text; messageBox.style.display = 'block'; } }
         function hideMessage() { /* ... (no changes) ... */ if(messageBox) messageBox.style.display = 'none'; }
 
-        // --- Game Loop ---
-        function gameLoop() { /* ... (no changes) ... */
-            if (gameOver) { animationFrameId = null; return; } const currentTime = Date.now(); if (!ctx) { console.error("Canvas context lost during loop!"); stopGameTimers(); return; }
-            try { /* Update Phase */
+        // --- *** MODIFIED: Game Loop includes resetting attack state *** ---
+        function gameLoop() {
+            if (gameOver) { animationFrameId = null; return; }
+            const currentTime = Date.now();
+            if (!ctx) { console.error("Canvas context lost during loop!"); stopGameTimers(); return; }
+
+            // --- Reset Attack States ---
+            // Reset isAttacking flag based on timer before updates run
+            const allEntities = [...playerUnits, ...enemyUnits, ...playerTowers, ...enemyTowers, ...playerBuildings, ...enemyBuildings];
+            allEntities.forEach(entity => {
+                if (entity && entity.isAttacking && currentTime > entity.attackAnimationEndTime) {
+                    entity.isAttacking = false;
+                }
+            });
+
+            // --- Update Phase ---
+            try {
                 if (!isTiebreakerActive) {
                     updateProjectiles(); updateLogProjectiles(logProjectiles, enemyUnits, playerUnits);
                     updateUnits(playerUnits, enemyUnits, enemyTowers, enemyBuildings); updateUnits(enemyUnits, playerUnits, playerTowers, playerBuildings);
                     updateTowers(playerTowers, enemyUnits, enemyBuildings); updateTowers(enemyTowers, playerUnits, playerBuildings);
                     updateBuildings(playerBuildings, enemyUnits); updateBuildings(enemyBuildings, playerUnits); cleanupDeadUnits();
-                } updateAttackEffects(currentTime); updateDisplays();
+                }
+                updateAttackEffects(currentTime); // Update visual effects (explosions, etc.)
+                updateDisplays(); // Update UI text/bars
             } catch (error) { console.error("Error during game update:", error); stopGameTimers(); showMessage("An error occurred!"); return; }
-            ctx.clearRect(0, 0, canvas.width, canvas.height); /* Drawing Phase */
+
+            // --- Drawing Phase ---
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             try {
-                playerTowers.forEach(drawTower); enemyTowers.forEach(drawTower); playerBuildings.forEach(drawBuilding); enemyBuildings.forEach(drawBuilding);
-                if (!isTiebreakerActive) { playerUnits.forEach(drawUnit); enemyUnits.forEach(drawUnit); projectiles.forEach(drawProjectile); logProjectiles.forEach(drawLogProjectile); }
-                else { /* Tiebreaker drawing */ tiebreakerEffectCounter++; if (tiebreakerEffectCounter % 30 < 15) { /* ... */ } } drawAttackEffects();
+                // Draw static elements first
+                playerTowers.forEach(drawTower); enemyTowers.forEach(drawTower);
+                playerBuildings.forEach(drawBuilding); enemyBuildings.forEach(drawBuilding);
+
+                if (!isTiebreakerActive) {
+                    // Draw dynamic elements if not in tiebreaker
+                    playerUnits.forEach(drawUnit); enemyUnits.forEach(drawUnit);
+                    projectiles.forEach(drawProjectile); logProjectiles.forEach(drawLogProjectile);
+                } else {
+                    // Draw Tiebreaker HP Drain Animation
+                    tiebreakerEffectCounter++;
+                    if (tiebreakerEffectCounter % 30 < 15) { /* ... (tiebreaker drawing logic) ... */ }
+                }
+                // Draw separate attack effects (explosions, non-unit flashes) on top
+                drawAttackEffects();
+
             } catch (error) { console.error("Error during game drawing:", error); stopGameTimers(); showMessage("An error occurred during drawing!"); return; }
-            if (!isTiebreakerActive) { checkGameOver(false); } /* Post-Draw Checks */
-            if (!gameOver) { animationFrameId = requestAnimationFrame(gameLoop); } else { animationFrameId = null; } /* Loop Continuation */
+
+            // --- Post-Draw Checks ---
+            if (!isTiebreakerActive) { checkGameOver(false); }
+
+            // --- Loop Continuation ---
+            if (!gameOver) { animationFrameId = requestAnimationFrame(gameLoop); }
+             else { animationFrameId = null; }
         }
 
 
