@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Tower Clash - Enhanced Attack FX</title> <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="./img/CRlogo.png">
+    <title>Simple Tower Clash - Log Fixed</title> <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
-        /* CSS remains the same */
+        /* --- CSS (No Changes) --- */
         :root {
             --primary-bg: #1e2a3a; --secondary-bg: #2c3e50; --tertiary-bg: #3b5970;
             --accent-blue: #3498db; --accent-red: #e74c3c; --accent-green: #2ecc71;
@@ -13,18 +14,23 @@
             --text-light: #ecf0f1; --text-dark: #2c3e50; --border-color: #1a2531;
             --card-bg: #4a6883; --elixir-color: var(--accent-purple);
             --knight-color: '#bdc3c7'; --skeletons-color: '#ecf0f1'; --bats-color: '#512E5F';
+            --hog-color: '#f39c12'; /* Hog Rider */
+            --log-color: '#8B4513'; /* The Log */
+            --cannon-color: '#95a5a6'; /* Cannon */
+
 
             --bg-gradient: linear-gradient(to bottom, #23344a, #1a2a3a);
             --container-gradient: linear-gradient(to bottom, #3a4c60, #2c3e50);
             --button-blue-gradient: linear-gradient(to bottom, #5dade2, #3498db);
             --button-green-gradient: linear-gradient(to bottom, #58d68d, #2ecc71);
-            --button-gray-gradient: linear-gradient(to bottom, #95a5a6, #7f8c8d);
+            --button-gray-gradient: linear-gradient(to bottom, #95a5a6, #7f8c8d); /* Cannon uses this */
             --button-purple-gradient: linear-gradient(to bottom, #af7ac5, #9b59b6);
             --button-red-gradient: linear-gradient(to bottom, #ec7063, #e74c3c);
             --button-white-gradient: linear-gradient(to bottom, #f8f9f9, #e5e7e9);
             --button-silver-gradient: linear-gradient(to bottom, #e5e7e9, #bdc3c7); /* Knight */
             --button-darkpurple-gradient: linear-gradient(to bottom, #7d3c98, #512e5f); /* Bats */
-            --button-orange-gradient: linear-gradient(to bottom, #f5b041, #f39c12); /* Fireball */
+            --button-orange-gradient: linear-gradient(to bottom, #f5b041, #f39c12); /* Fireball / Hog */
+            --button-brown-gradient: linear-gradient(to bottom, #a05a2c, #8B4513); /* Log */
             --canvas-gradient: linear-gradient(to bottom, #bdc3c7, #95a5a6);
         }
         body {
@@ -97,6 +103,10 @@
         .elixir-bar-fill { height: 100%; width: 0%; background-color: var(--elixir-color); border-radius: 3px; transition: width 0.2s ease-out; box-shadow: inset 0 0 3px rgba(255,255,255,0.3); }
         #gameCanvas { display: block; background-color: #aaa; background-image: var(--canvas-gradient); border: 4px solid var(--text-dark); margin: 0 auto 20px auto; max-width: 100%; height: auto; border-radius: 8px; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); cursor: default; }
         #targetingIndicator { position: absolute; border: 3px dashed var(--accent-red); border-radius: 50%; background-color: rgba(231, 76, 60, 0.2); pointer-events: none; display: none; box-sizing: border-box; z-index: 5; }
+        /* Added for placement validation */
+        #placementIndicator { position: absolute; border: 3px solid green; border-radius: 5px; background-color: rgba(46, 204, 113, 0.2); pointer-events: none; display: none; box-sizing: border-box; z-index: 5; }
+        #placementIndicator.invalid { border-color: red; background-color: rgba(231, 76, 60, 0.2); }
+
         #battleControls { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 15px; padding: 10px; background-color: var(--tertiary-bg); border-radius: 8px; min-height: 95px; border: 2px solid rgba(0,0,0,0.3); }
         button.deploy-button {
              width: 65px; height: 85px; background-color: var(--card-bg); border: 2px solid var(--border-color); border-radius: 5px;
@@ -149,7 +159,7 @@
         <div style="position: relative; max-width: 800px; margin: 0 auto 15px auto;">
              <canvas id="gameCanvas" width="800" height="250"></canvas>
              <div id="targetingIndicator"></div>
-        </div>
+             <div id="placementIndicator"></div> </div>
         <div id="battleControls"></div>
         <button id="resetButton">End Battle & Build Deck</button>
     </div>
@@ -175,34 +185,44 @@
         const resetButton = document.getElementById('resetButton');
         const gameTimerDisplay = document.getElementById('gameTimerDisplay');
         const targetingIndicator = document.getElementById('targetingIndicator');
+        const placementIndicator = document.getElementById('placementIndicator'); // Added
 
         // --- Game Configuration ---
         const KING_TOWER_HP = 1000; const PRINCESS_TOWER_HP = 600; const TOWER_RANGE = 150;
         const KING_TOWER_DAMAGE = 10; const PRINCESS_TOWER_DAMAGE = 12; const TOWER_ATTACK_SPEED = 1000;
         const KING_TOWER_WIDTH = 60; const KING_TOWER_HEIGHT = 100; const PRINCESS_TOWER_WIDTH = 45; const PRINCESS_TOWER_HEIGHT = 75;
-        const MAX_ELIXIR = 10; const ELIXIR_REGEN_RATE = 1; const ELIXIR_REGEN_INTERVAL = 1000;
+        const MAX_ELIXIR = 10; const ELIXIR_REGEN_RATE = 1; const ELIXIR_REGEN_INTERVAL = 1000; // 1 elixir per second
         const BATTLE_DURATION_SECONDS = 180; const TIEBREAKER_HP_DRAIN_RATE = 15; const TIEBREAKER_DRAIN_INTERVAL = 500;
         const DECK_SIZE = 8;
+        const PLACEMENT_TILE_SIZE = 30; // For building placement checks
+        const PLAYER_SIDE_X_LIMIT = 400; // Midpoint of 800 width canvas
 
         // --- Card Library with imageUrl ---
         const PLACEHOLDER_URL_BASE = "https://placehold.co/60x80/4a6883/ecf0f1?text=";
         const FULL_CARD_LIBRARY = [
-            { id: 'melee', name: 'Mini Pekka', type: 'unit', cost: 4, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000018.webp`, stats: { hp: 100, damage: 15, speed: 1.5, range: 25, attackSpeed: 800, size: 20, color: '#3498db', shape: 'square', maxHp: 100 } },
-            { id: 'ranged', name: 'Archer', type: 'unit', cost: 3, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000001.webp`, stats: { hp: 60, damage: 10, speed: 1.2, range: 100, attackSpeed: 1000, size: 18, color: '#2ecc71', shape: 'circle', maxHp: 60 } },
-            { id: 'tank', name: 'Giant', type: 'unit', cost: 5, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000003.webp`, stats: { hp: 250, damage: 10, speed: 0.8, range: 25, attackSpeed: 1200, size: 25, color: '#7f8c8d', shape: 'square', maxHp: 250 } },
-            { id: 'assassin', name: 'Bandit', type: 'unit', cost: 3, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000046.webp`, stats: { hp: 80, damage: 35, speed: 2.0, range: 25, attackSpeed: 900, size: 18, color: '#8e44ad', shape: 'diamond', maxHp: 80 } },
-            { id: 'skeletons', name: 'Skeletons', type: 'unit', cost: 1, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000010.webp`, stats: { spawnCount: 3, unitStats: { hp: 15, damage: 5, speed: 1.8, range: 25, attackSpeed: 1000, size: 15, color: '#ecf0f1', shape: 'circle', maxHp: 15 } } },
-            { id: 'knight', name: 'Knight', type: 'unit', cost: 3, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000000.webp`, stats: { hp: 120, damage: 18, speed: 1.5, range: 25, attackSpeed: 900, size: 20, color: '#bdc3c7', shape: 'square', maxHp: 120 } },
-            { id: 'bats', name: 'Bats', type: 'unit', cost: 2, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000049.webp`, stats: { spawnCount: 3, unitStats: { hp: 15, damage: 6, speed: 2.2, range: 25, attackSpeed: 900, size: 15, color: '#512E5F', shape: 'diamond', maxHp: 15 } } },
-            { id: 'fireball', name: 'Fireball', type: 'spell', cost: 4, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/28000000.webp`, stats: { damage: 100, radius: 50, delay: 500 } },
-            { id: 'log', name: 'The Log', type: 'spell', cost: 2, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}LOG` },
-            { id: 'cannon', name: 'Cannon', type: 'building', cost: 3, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}CAN` },
+            // --- Existing Units ---
+            { id: 'melee', name: 'Mini Pekka', type: 'unit', cost: 4, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000018.webp`, stats: { hp: 100, damage: 15, speed: 1.5, range: 25, attackSpeed: 800, size: 20, color: '#3498db', shape: 'square', maxHp: 100, targets: ['ground'] } }, // Added targets
+            { id: 'ranged', name: 'Archer', type: 'unit', cost: 3, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000001.webp`, stats: { hp: 60, damage: 10, speed: 1.2, range: 100, attackSpeed: 1000, size: 18, color: '#2ecc71', shape: 'circle', maxHp: 60, targets: ['air', 'ground'] } }, // Added targets
+            { id: 'tank', name: 'Giant', type: 'unit', cost: 5, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000003.webp`, stats: { hp: 250, damage: 10, speed: 0.8, range: 25, attackSpeed: 1200, size: 25, color: '#7f8c8d', shape: 'square', maxHp: 250, targets: ['ground'], targetPreference: 'building' } }, // Added targets, preference
+            { id: 'assassin', name: 'Bandit', type: 'unit', cost: 3, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000046.webp`, stats: { hp: 80, damage: 35, speed: 2.0, range: 25, attackSpeed: 900, size: 18, color: '#8e44ad', shape: 'diamond', maxHp: 80, targets: ['ground'] } }, // Added targets
+            { id: 'skeletons', name: 'Skeletons', type: 'unit', cost: 1, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000010.webp`, stats: { spawnCount: 3, unitStats: { hp: 15, damage: 5, speed: 1.8, range: 25, attackSpeed: 1000, size: 15, color: '#ecf0f1', shape: 'circle', maxHp: 15, targets: ['ground'] } } }, // Added targets
+            { id: 'knight', name: 'Knight', type: 'unit', cost: 3, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000000.webp`, stats: { hp: 120, damage: 18, speed: 1.5, range: 25, attackSpeed: 900, size: 20, color: '#bdc3c7', shape: 'square', maxHp: 120, targets: ['ground'] } }, // Added targets
+            { id: 'bats', name: 'Bats', type: 'unit', cost: 2, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000049.webp`, stats: { spawnCount: 3, unitStats: { hp: 15, damage: 6, speed: 2.2, range: 25, attackSpeed: 900, size: 15, color: '#512E5F', shape: 'diamond', maxHp: 15, isAir: true, targets: ['air', 'ground'] } } }, // Added targets
+
+            // --- Existing Spells ---
+            { id: 'fireball', name: 'Fireball', type: 'spell', cost: 4, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/28000000.webp`, stats: { damage: 100, radius: 50, delay: 500, targets: ['air', 'ground'] } }, // Added targets flag
+
+            // --- *** NEWLY IMPLEMENTED CARDS *** ---
+            { id: 'log', name: 'The Log', type: 'spell', cost: 2, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/28000011.webp`, stats: { damage: 40, width: 40, speed: 4, travelDistance: 350, pushbackStrength: 5, pushbackDuration: 150, targets: ['ground'] } },
+            { id: 'cannon', name: 'Cannon', type: 'building', cost: 3, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/27000000.webp`, stats: { hp: 150, damage: 25, range: 130, attackSpeed: 800, lifetime: 30000, size: 40, color: '#95a5a6', maxHp: 150, targets: ['ground'] } },
+            { id: 'hogrider', name: 'Hog Rider', type: 'unit', cost: 4, implemented: true, imageUrl: `https://cdn.statsroyale.com/v6/cards/full_b/26000021.webp`, stats: { hp: 200, damage: 40, speed: 2.0, range: 25, attackSpeed: 1000, size: 22, color: '#f39c12', shape: 'square', maxHp: 200, targetPreference: 'building', targets: ['ground'] } }, // Added targets
+
+            // --- Unimplemented Cards ---
             { id: 'arrows', name: 'Arrows', type: 'spell', cost: 3, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}ARR` },
             { id: 'zap_evo', name: 'Zap Evo', type: 'spell', cost: 2, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}ZAP` },
             { id: 'mortar_evo', name: 'Mortar Evo', type: 'building', cost: 4, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}MOR` },
             { id: 'princess', name: 'Princess', type: 'unit', cost: 3, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}PRI` },
             { id: 'pekka', name: 'P.E.K.K.A', type: 'unit', cost: 7, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}PEK` },
-            { id: 'hogrider', name: 'Hog Rider', type: 'unit', cost: 4, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}HOG` },
             { id: 'guards', name: 'Guards', type: 'unit', cost: 3, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}GUA` },
             { id: 'icespirit', name: 'Ice Spirit', type: 'unit', cost: 1, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}ICE` },
             { id: 'goblingang', name: 'Goblin Gang', type: 'unit', cost: 3, implemented: false, imageUrl: `${PLACEHOLDER_URL_BASE}GG` },
@@ -213,11 +233,13 @@
         ];
         function getCardById(id) { return FULL_CARD_LIBRARY.find(card => card.id === id); }
 
-        const ENEMY_COLORS = { /* ... (no changes) ... */
+        const ENEMY_COLORS = {
              melee: '#c0392b', ranged: '#f1c40f', tank: '#566573', assassin: '#d2b4de',
-             skeletons: '#bdc3c7', knight: '#95a5a6', bats: '#9B59B6'
+             skeletons: '#bdc3c7', knight: '#95a5a6', bats: '#9B59B6',
+             hogrider: '#e67e22', // Enemy Hog color
+             cannon: '#7f8c8d', // Enemy Cannon color
         }
-        const AI_DEPLOY_INTERVAL = 3000;
+        const AI_DEPLOY_INTERVAL = 3000; // AI thinks every 3 seconds
         const AI_STARTING_ELIXIR = 5;
 
         // --- Game State ---
@@ -225,10 +247,13 @@
         let playerElixir = 3;
         let playerUnits = [];
         let enemyUnits = [];
+        let playerBuildings = []; // <-- Added for buildings
+        let enemyBuildings = []; // <-- Added for buildings
         let projectiles = [];
+        let logProjectiles = []; // <-- Added for The Log
         let playerTowers = [];
         let enemyTowers = [];
-        let attackEffects = []; // <-- Added for attack animations
+        let attackEffects = [];
         let elixirIntervalId = null;
         let aiIntervalId = null;
         let animationFrameId = null;
@@ -241,24 +266,27 @@
         let tiebreakerEffectCounter = 0;
         let isTargetingSpell = false;
         let currentSpellType = null;
+        let isPlacingBuilding = false; // <-- Added for building placement
+        let currentBuildingType = null; // <-- Added for building placement
 
         // --- Tower Initialization ---
-        function createTowers(isPlayer) { /* ... (no changes) ... */
+        function createTowers(isPlayer) {
             const canvasWidth = canvas?.width || 800; const canvasHeight = canvas?.height || 250;
             const kingY = canvasHeight / 2; const princessYOffset = 60;
-            const kingX = isPlayer ? 50 : canvasWidth - 50 - KING_TOWER_WIDTH;
-            const princessXOffset = KING_TOWER_WIDTH / 2 + PRINCESS_TOWER_WIDTH / 2 + 10;
-            const kingTower = { id: isPlayer ? 'player_king' : 'enemy_king', x: kingX, y: kingY, hp: KING_TOWER_HP, maxHp: KING_TOWER_HP, width: KING_TOWER_WIDTH, height: KING_TOWER_HEIGHT, range: TOWER_RANGE, damage: KING_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: true, color: isPlayer ? '#3498db' : '#e74c3c' };
-            const princessLeft = { id: isPlayer ? 'player_pleft' : 'enemy_pleft', x: kingX + (isPlayer ? princessXOffset : -princessXOffset), y: kingY - princessYOffset, hp: PRINCESS_TOWER_HP, maxHp: PRINCESS_TOWER_HP, width: PRINCESS_TOWER_WIDTH, height: PRINCESS_TOWER_HEIGHT, range: TOWER_RANGE, damage: PRINCESS_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: false, color: isPlayer ? '#5dade2' : '#ec7063' };
-            const princessRight = { id: isPlayer ? 'player_pright' : 'enemy_pright', x: kingX + (isPlayer ? princessXOffset : -princessXOffset), y: kingY + princessYOffset, hp: PRINCESS_TOWER_HP, maxHp: PRINCESS_TOWER_HP, width: PRINCESS_TOWER_WIDTH, height: PRINCESS_TOWER_HEIGHT, range: TOWER_RANGE, damage: PRINCESS_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: false, color: isPlayer ? '#5dade2' : '#ec7063' };
+            const kingX = isPlayer ? 80 : canvasWidth - 80 - KING_TOWER_WIDTH;
+            const princessXOffset = KING_TOWER_WIDTH / 2 + PRINCESS_TOWER_WIDTH / 2 + 15;
+            const kingTower = { id: isPlayer ? 'player_king' : 'enemy_king', x: kingX, y: kingY, hp: KING_TOWER_HP, maxHp: KING_TOWER_HP, width: KING_TOWER_WIDTH, height: KING_TOWER_HEIGHT, range: TOWER_RANGE, damage: KING_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: true, color: isPlayer ? '#3498db' : '#e74c3c', targets: ['air', 'ground'] };
+            const princessLeft = { id: isPlayer ? 'player_pleft' : 'enemy_pleft', x: kingX + (isPlayer ? princessXOffset : -princessXOffset), y: kingY - princessYOffset, hp: PRINCESS_TOWER_HP, maxHp: PRINCESS_TOWER_HP, width: PRINCESS_TOWER_WIDTH, height: PRINCESS_TOWER_HEIGHT, range: TOWER_RANGE, damage: PRINCESS_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: false, color: isPlayer ? '#5dade2' : '#ec7063', targets: ['air', 'ground'] };
+            const princessRight = { id: isPlayer ? 'player_pright' : 'enemy_pright', x: kingX + (isPlayer ? princessXOffset : -princessXOffset), y: kingY + princessYOffset, hp: PRINCESS_TOWER_HP, maxHp: PRINCESS_TOWER_HP, width: PRINCESS_TOWER_WIDTH, height: PRINCESS_TOWER_HEIGHT, range: TOWER_RANGE, damage: PRINCESS_TOWER_DAMAGE, attackSpeed: TOWER_ATTACK_SPEED, lastAttackTime: 0, isTower: true, isKingTower: false, color: isPlayer ? '#5dade2' : '#ec7063', targets: ['air', 'ground'] };
             return [princessLeft, kingTower, princessRight];
         }
 
         // --- Utilities ---
         function distance(x1, y1, x2, y2) { return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2)); }
+        function isGroundUnit(unit) { return !unit?.stats?.isAir; } // Helper to check if unit is ground
 
         // --- Drawing ---
-        function drawTower(tower) { /* ... (no changes needed from previous version) ... */
+        function drawTower(tower) { /* ... (no changes) ... */
              if (!ctx || !tower) return;
              if (tower.hp > 0) {
                  const heightModifier = tower.isKingTower ? 1 : 0.8; const widthModifier = tower.isKingTower ? 1 : 0.9;
@@ -287,13 +315,46 @@
         }
         function drawUnit(unit) { /* ... (no changes) ... */
             if (!ctx || !unit || !unit.stats || typeof unit.maxHp === 'undefined') return;
-            ctx.fillStyle = unit.color; ctx.beginPath();
-            const shape = unit.stats.shape || 'square'; const size = unit.stats.size || 15;
+            ctx.fillStyle = unit.color;
+            ctx.beginPath();
+            const shape = unit.stats.shape || 'square';
+            const size = unit.stats.size || 15;
             switch (shape) {
                 case 'circle': ctx.arc(unit.x, unit.y, size / 2, 0, Math.PI * 2); ctx.fill(); break;
                 case 'diamond': ctx.moveTo(unit.x, unit.y - size / 2); ctx.lineTo(unit.x + size / 2, unit.y); ctx.lineTo(unit.x, unit.y + size / 2); ctx.lineTo(unit.x - size / 2, unit.y); ctx.closePath(); ctx.fill(); break;
                 case 'square': default: ctx.fillRect(unit.x - size / 2, unit.y - size / 2, size, size); break;
-            } drawHealthBar(unit.x - size / 2, unit.y - size / 2 - 10, size, 5, unit.hp, unit.maxHp);
+            }
+            drawHealthBar(unit.x - size / 2, unit.y - size / 2 - 10, size, 5, unit.hp, unit.maxHp);
+        }
+        function drawBuilding(building) { /* ... (no changes) ... */
+            if (!ctx || !building || !building.stats) return;
+            const size = building.stats.size || 40;
+            const healthBarY = building.y - size / 2 - 15;
+            const healthBarHeight = 8;
+            ctx.fillStyle = building.color;
+            ctx.fillRect(building.x - size / 2, building.y - size / 2, size, size);
+            ctx.fillStyle = lightenColor(building.color, -20);
+            const barrelWidth = size * 0.2;
+            const barrelLength = size * 0.4;
+            const barrelX = building.x - barrelWidth / 2;
+            const barrelY = building.y - size / 2 - barrelLength;
+            ctx.fillRect(barrelX, barrelY, barrelWidth, barrelLength);
+            drawHealthBar(building.x - size / 2, healthBarY, size, healthBarHeight, building.hp, building.maxHp);
+        }
+        function drawLogProjectile(log) { /* ... (no changes) ... */
+            if (!ctx || !log) return;
+            const width = log.stats.width;
+            const length = 60; // Visual length of the log
+            const angle = log.direction === 1 ? 0 : Math.PI;
+            ctx.save(); ctx.translate(log.x, log.y); ctx.rotate(angle);
+            ctx.fillStyle = log.color || '#8B4513';
+            ctx.fillRect(-length / 2, -width / 2, length, width);
+            ctx.fillStyle = lightenColor(log.color || '#8B4513', -20);
+            for (let i = 0; i < 3; i++) {
+                ctx.fillRect(-length / 2 + i * (length/3), -width/2 - 2, length/4, 4);
+                ctx.fillRect(-length / 2 + i * (length/3) + 5, width/2 -2, length/4, 4);
+            }
+            ctx.restore();
         }
         function drawHealthBar(x, y, width, height, currentHp, maxHp, isTowerBar = false, isPlayerTower = false) { /* ... (no changes) ... */
              if (!ctx) return; const validMaxHp = Math.max(1, maxHp); const hpPercent = Math.max(0, currentHp) / validMaxHp;
@@ -302,42 +363,39 @@
              ctx.fillRect(x, y, width * hpPercent, height);
              ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 1; ctx.strokeRect(x, y, width, height);
          }
-        function drawProjectile(p) { if (!ctx) return; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
+        function drawProjectile(p) { /* ... (no changes) ... */ if (!ctx) return; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
         function lightenColor(hex, percent) { /* ... (no changes) ... */
             hex = hex.replace(/^\s*#|\s*$/g, ''); if(hex.length == 3){ hex = hex.replace(/(.)/g, '$1$1'); }
             var bigint = parseInt(hex, 16); var r = (bigint >> 16) & 255; var g = (bigint >> 8) & 255; var b = bigint & 255;
             r = Math.min(255, r + (255 * percent / 100)); g = Math.min(255, g + (255 * percent / 100)); b = Math.min(255, b + (255 * percent / 100));
             return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
         }
-        // --- Modified function to draw attack effects ---
-        function drawAttackEffects() {
+        function drawAttackEffects() { /* ... (no changes) ... */
             if (!ctx) return;
+            const currentTime = Date.now();
             attackEffects.forEach(effect => {
-                const alpha = 1 - (Date.now() - effect.startTime) / effect.duration; // Fade out effect
-                if (alpha <= 0) return; // Skip if faded
-
+                const elapsed = currentTime - effect.startTime;
+                const progress = Math.min(1, elapsed / effect.duration);
+                const alpha = 1 - progress;
+                if (alpha <= 0) return;
+                ctx.globalAlpha = alpha;
                 if (effect.type === 'slash') {
-                    // --- Enhanced Slash ---
-                    ctx.strokeStyle = `rgba(0, 255, 255, ${alpha * 0.9})`; // Bright Cyan
-                    ctx.lineWidth = 3; // Slightly thicker
-                    // Add glow
-                    ctx.shadowColor = 'rgba(0, 255, 255, 0.7)';
-                    ctx.shadowBlur = 5;
-                    // Draw line
-                    ctx.beginPath();
-                    ctx.moveTo(effect.x1, effect.y1);
-                    ctx.lineTo(effect.x2, effect.y2);
-                    ctx.stroke();
-                    // Reset shadow
-                    ctx.shadowColor = 'transparent';
-                    ctx.shadowBlur = 0;
-                    // --- End Enhanced Slash ---
+                    ctx.strokeStyle = `rgba(0, 255, 255, ${alpha * 0.9})`; ctx.lineWidth = 3;
+                    ctx.shadowColor = 'rgba(0, 255, 255, 0.7)'; ctx.shadowBlur = 5;
+                    ctx.beginPath(); ctx.moveTo(effect.x1, effect.y1); ctx.lineTo(effect.x2, effect.y2); ctx.stroke();
+                    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
                 } else if (effect.type === 'flash') {
-                    ctx.fillStyle = `rgba(255, 255, 150, ${alpha * 0.7})`; // Yellowish flash
-                    ctx.beginPath();
-                    ctx.arc(effect.x, effect.y, effect.radius * (1 + (1-alpha)*0.5), 0, Math.PI * 2); // Effect expands slightly then fades
-                    ctx.fill();
+                    ctx.fillStyle = `rgba(255, 255, 150, ${alpha * 0.7})`; ctx.beginPath();
+                    ctx.arc(effect.x, effect.y, effect.radius * (1 + progress * 0.5), 0, Math.PI * 2); ctx.fill();
+                } else if (effect.type === 'explosion') {
+                    const currentRadius = effect.radius * progress; ctx.fillStyle = effect.color || 'rgba(255, 100, 0, 0.8)';
+                    ctx.beginPath(); ctx.arc(effect.x, effect.y, currentRadius, 0, Math.PI * 2); ctx.fill();
+                    if (progress < 0.5) {
+                        ctx.fillStyle = `rgba(255, 255, 150, ${alpha * 0.5})`; ctx.beginPath();
+                        ctx.arc(effect.x, effect.y, currentRadius * 0.5, 0, Math.PI * 2); ctx.fill();
+                    }
                 }
+                ctx.globalAlpha = 1.0; // Reset global alpha
             });
         }
 
@@ -374,7 +432,7 @@
             const cardElement = document.createElement('div');
             cardElement.classList.add('card');
             cardElement.dataset.id = card.id;
-            cardElement.dataset.type = card.type;
+            cardElement.dataset.type = card.type; // Ensure type is set
             const costElement = document.createElement('div');
             costElement.classList.add('card-cost');
             costElement.textContent = card.cost;
@@ -415,38 +473,49 @@
                 if (card) {
                     const button = document.createElement('button');
                     button.classList.add('deploy-button');
-                    button.dataset.id = card.id; button.dataset.type = card.type; button.dataset.cost = card.cost;
+                    button.dataset.id = card.id;
+                    button.dataset.type = card.type; // Set type for listener
+                    button.dataset.cost = card.cost;
                     button.disabled = !card.implemented || playerElixir < card.cost;
                     const iconContainer = document.createElement('div'); iconContainer.classList.add('card-icon');
-                    if (card.imageUrl) { const imgElement = document.createElement('img'); imgElement.src = card.imageUrl; imgElement.alt = card.name; imgElement.onerror = function() { this.onerror = null; this.style.display = 'none'; const fallback = document.createElement('span'); fallback.classList.add('fallback-text'); const nameParts = card.name.split(' '); let initials = nameParts[0] ? nameParts[0][0] : '?'; if (nameParts.length > 1 && nameParts[1]) initials += nameParts[1][0]; fallback.textContent = initials.toUpperCase(); iconContainer.appendChild(fallback); }; iconContainer.appendChild(imgElement); }
-                     else { const fallback = document.createElement('span'); fallback.classList.add('fallback-text'); const nameParts = card.name.split(' '); let initials = nameParts[0] ? nameParts[0][0] : '?'; if (nameParts.length > 1 && nameParts[1]) initials += nameParts[1][0]; fallback.textContent = initials.toUpperCase(); iconContainer.appendChild(fallback); }
+                    if (card.imageUrl) { /* ... image loading ... */
+                        const imgElement = document.createElement('img'); imgElement.src = card.imageUrl; imgElement.alt = card.name;
+                        imgElement.onerror = function() { this.onerror = null; this.style.display = 'none'; const fallback = document.createElement('span'); fallback.classList.add('fallback-text'); const nameParts = card.name.split(' '); let initials = nameParts[0] ? nameParts[0][0] : '?'; if (nameParts.length > 1 && nameParts[1]) initials += nameParts[1][0]; fallback.textContent = initials.toUpperCase(); iconContainer.appendChild(fallback); };
+                        iconContainer.appendChild(imgElement);
+                    } else { /* ... fallback text ... */
+                        const fallback = document.createElement('span'); fallback.classList.add('fallback-text'); const nameParts = card.name.split(' '); let initials = nameParts[0] ? nameParts[0][0] : '?'; if (nameParts.length > 1 && nameParts[1]) initials += nameParts[1][0]; fallback.textContent = initials.toUpperCase(); iconContainer.appendChild(fallback);
+                    }
                     button.innerHTML = ` <div class="card-cost">${card.cost}</div> ${iconContainer.outerHTML} <div class="card-name">${card.name}${!card.implemented ? ' (N/A)' : ''}</div> `;
                     if(card.id === 'knight') button.style.backgroundImage = 'var(--button-silver-gradient)';
                     else if(card.id === 'bats') button.style.backgroundImage = 'var(--button-darkpurple-gradient)';
                     else if(card.id === 'skeletons') { button.style.backgroundImage = 'var(--button-white-gradient)'; button.style.color = '#333'; button.style.textShadow = 'none';}
-                    else if(card.id === 'fireball') button.style.backgroundImage = 'var(--button-orange-gradient)';
-                    if (card.implemented) { /* Listener added in setup */ }
+                    else if(card.id === 'fireball' || card.id === 'hogrider') button.style.backgroundImage = 'var(--button-orange-gradient)'; // Hog uses orange too
+                    else if(card.id === 'log') button.style.backgroundImage = 'var(--button-brown-gradient)';
+                    else if(card.id === 'cannon') button.style.backgroundImage = 'var(--button-gray-gradient)';
                     battleControlsContainer.appendChild(button);
                 }
             });
-             setupDeployButtonListeners();
+             // setupDeployButtonListeners called by override
         }
-
-        // --- Spell Logic ---
-        function handleDeployAction(cardId) { /* ... (no changes) ... */
+        function handleDeployAction(cardId, clickX, clickY) { /* ... (no changes) ... */
              const card = getCardById(cardId);
              if (!card || !card.implemented) { console.error("handleDeployAction called with invalid/unimplemented card:", cardId); return; };
              if (card.type === 'unit') { deployUnit(card.id, true); }
-             else if (card.type === 'spell') { startSpellTargeting(card.id); }
+             else if (card.type === 'spell') {
+                 if (card.id === 'log') { executeSpellEffect(card.id, clickX, clickY); }
+                 else { startSpellTargeting(card.id); }
+             } else if (card.type === 'building') { startBuildingPlacement(card.id); }
         }
+
+        // --- Spell Logic ---
         function startSpellTargeting(spellId) { /* ... (no changes) ... */
              const spellCard = getCardById(spellId);
-             if (isTargetingSpell || !canvas || !spellCard || spellCard.type !== 'spell') return;
+             if (isTargetingSpell || isPlacingBuilding || !canvas || !spellCard || spellCard.type !== 'spell' || spellId === 'log' || !spellCard.stats.radius) return;
              console.log(`Targeting ${spellId}...`);
              isTargetingSpell = true; currentSpellType = spellId; canvas.style.cursor = 'crosshair';
              updateBattleButtons();
              if (targetingIndicator && spellCard.stats.radius) {
-                 const radius = spellCard.stats.radius * (canvas.width / 800);
+                 const radius = spellCard.stats.radius;
                  targetingIndicator.style.width = `${radius * 2}px`;
                  targetingIndicator.style.height = `${radius * 2}px`;
                  targetingIndicator.style.display = 'block';
@@ -477,226 +546,444 @@
              canvas.removeEventListener('mousemove', updateTargetingIndicator);
              updateBattleButtons();
         }
-        function executeSpellEffect(spellId, x, y) { /* ... (no changes) ... */
-             const spellCard = getCardById(spellId);
-             if (!spellCard || spellCard.type !== 'spell') return;
-             console.log(`Executing ${spellId} effect.`);
-             const radius = spellCard.stats.radius; const damage = spellCard.stats.damage;
-             if (ctx) { ctx.fillStyle = 'rgba(255, 165, 0, 0.7)'; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill(); }
-             [...enemyUnits, ...enemyTowers].forEach(target => {
-                 if (!target || target.hp <= 0) return;
-                 const targetX = target.x + (target.isTower ? target.width / 2 : 0); const targetY = target.y;
-                 if (distance(x, y, targetX, targetY) <= radius) { target.hp -= damage; console.log(`${spellId} hit ${target.isTower ? 'tower' : target.type || 'unit'} (ID: ${target.id})`); }
-             });
-             updateDisplays(); cleanupDeadUnits();
+
+        // --- *** MODIFIED: executeSpellEffect with Log Y-position Fix *** ---
+        function executeSpellEffect(spellId, x, y) { // x, y are click coordinates
+            const spellCard = getCardById(spellId);
+            if (!spellCard || spellCard.type !== 'spell') return;
+
+            console.log(`%cExecuting ${spellId} effect at (${x.toFixed(0)}, ${y.toFixed(0)})`, "color: orange; font-weight: bold;");
+
+            if (spellId === 'fireball') {
+                const radius = spellCard.stats.radius;
+                const damage = spellCard.stats.damage;
+                const canTargetAir = spellCard.stats.targets?.includes('air');
+                const canTargetGround = spellCard.stats.targets?.includes('ground');
+
+                // Visual effect
+                attackEffects.push({ type: 'explosion', x: x, y: y, radius: radius, duration: 400, startTime: Date.now(), color: 'rgba(255, 100, 0, 0.8)' });
+
+                // Apply damage to enemies
+                const targetsToCheck = [...enemyUnits, ...enemyTowers, ...enemyBuildings]; // Include buildings
+                targetsToCheck.forEach(target => {
+                    if (!target || target.hp <= 0) return;
+                    // Check target type (air/ground) compatibility
+                    const targetIsAir = target.stats?.isAir;
+                    if (targetIsAir && !canTargetAir) return;
+                    if (!targetIsAir && !canTargetGround) return;
+
+                    const targetCenterX = target.x + (target.isTower || target.isBuilding ? target.width / 2 : 0);
+                    const targetCenterY = target.y;
+                    const dist = distance(x, y, targetCenterX, targetCenterY);
+
+                    if (dist <= radius) {
+                        console.log(`   -> ${spellId} HIT ${target.isTower ? 'tower' : target.isBuilding ? 'building' : target.type || 'unit'} (ID: ${target.id}) at distance ${dist.toFixed(1)}. HP before: ${target.hp.toFixed(0)}`);
+                        target.hp -= damage;
+                        console.log(`   -> HP after: ${target.hp.toFixed(0)}`);
+                        attackEffects.push({ type: 'flash', x: targetCenterX, y: targetCenterY, radius: (target.width || target.stats?.size || 10) * 0.3, duration: 150, startTime: Date.now() });
+                    }
+                });
+
+            } else if (spellId === 'log') {
+                // Create a Log projectile instance
+                const logStats = spellCard.stats;
+                const startX = 0; // Start from player side edge
+
+                // --- FIX: Set Y coordinate to the center of the canvas ---
+                const logYPosition = canvas.height / 2;
+                // --- End Fix ---
+
+                logProjectiles.push({
+                    id: `log_${Date.now()}`,
+                    x: startX,
+                    // y: y, // OLD: Used click Y coordinate, which was incorrect based on logs
+                    y: logYPosition, // NEW: Use the calculated center Y position
+                    startX: startX,
+                    stats: logStats,
+                    color: 'var(--log-color)',
+                    direction: 1, // Player's log always moves right
+                    startTime: Date.now(),
+                    hitTargets: [] // Keep track of targets already hit by this log
+                });
+                // AI Log would start from other side (x=canvas.width), direction -1, y also canvas.height/2
+            }
+
+            updateDisplays();
+            cleanupDeadUnits(); // Includes buildings now
         }
+
+
+        // --- Building Placement Logic ---
+        function startBuildingPlacement(buildingId) { /* ... (no changes) ... */
+            const buildingCard = getCardById(buildingId);
+            if (isTargetingSpell || isPlacingBuilding || !canvas || !buildingCard || buildingCard.type !== 'building') return;
+            console.log(`Placing ${buildingId}...`);
+            isPlacingBuilding = true; currentBuildingType = buildingId; canvas.style.cursor = 'copy';
+            updateBattleButtons();
+            const size = buildingCard.stats.size || PLACEMENT_TILE_SIZE;
+            placementIndicator.style.width = `${size}px`; placementIndicator.style.height = `${size}px`;
+            placementIndicator.style.display = 'block';
+            canvas.addEventListener('mousemove', updatePlacementIndicator);
+            canvas.addEventListener('mousedown', handleBuildingPlace, { once: true });
+        }
+        function updatePlacementIndicator(event) { /* ... (no changes) ... */
+            if (!isPlacingBuilding || !currentBuildingType || !placementIndicator || !canvas) return;
+            const rect = canvas.getBoundingClientRect(); const x = event.clientX - rect.left; const y = event.clientY - rect.top;
+            const card = getCardById(currentBuildingType); const size = card.stats.size || PLACEMENT_TILE_SIZE;
+            const indicatorX = x - size / 2; const indicatorY = y - size / 2;
+            placementIndicator.style.left = `${indicatorX}px`; placementIndicator.style.top = `${indicatorY}px`;
+            if (isValidPlacement(x, y, true)) { placementIndicator.classList.remove('invalid'); }
+            else { placementIndicator.classList.add('invalid'); }
+        }
+        function handleBuildingPlace(event) { /* ... (no changes) ... */
+            if (!isPlacingBuilding || !currentBuildingType || !canvas) return;
+            event.preventDefault();
+            const rect = canvas.getBoundingClientRect(); const targetX = event.clientX - rect.left; const targetY = event.clientY - rect.top;
+            if (isValidPlacement(targetX, targetY, true)) {
+                console.log(`Placing ${currentBuildingType} at (${targetX.toFixed(0)}, ${targetY.toFixed(0)})`);
+                deployBuilding(currentBuildingType, true, targetX, targetY);
+            } else {
+                console.log(`Invalid placement location for ${currentBuildingType}.`);
+                playerElixir += getCardById(currentBuildingType).cost; updateDisplays();
+            }
+            isPlacingBuilding = false; currentBuildingType = null; canvas.style.cursor = 'default';
+            if (placementIndicator) placementIndicator.style.display = 'none';
+            canvas.removeEventListener('mousemove', updatePlacementIndicator);
+            updateBattleButtons();
+        }
+        function isValidPlacement(x, y, isPlayer) { /* ... (no changes) ... */
+            const card = getCardById(currentBuildingType); if (!card) return false;
+            const size = card.stats.size || PLACEMENT_TILE_SIZE; const halfSize = size / 2;
+            if (isPlayer && x > PLAYER_SIDE_X_LIMIT) return false;
+            if (!isPlayer && x < PLAYER_SIDE_X_LIMIT) return false;
+            if (x - halfSize < 0 || x + halfSize > canvas.width || y - halfSize < 0 || y + halfSize > canvas.height) return false;
+            const checkEntities = isPlayer ? [...playerTowers, ...playerBuildings] : [...enemyTowers, ...enemyBuildings];
+            const minDistance = size * 0.8;
+            for (const entity of checkEntities) {
+                 if (!entity || entity.hp <= 0) continue;
+                 const entitySize = entity.isTower ? (entity.isKingTower ? KING_TOWER_WIDTH : PRINCESS_TOWER_WIDTH) : entity.stats?.size || PLACEMENT_TILE_SIZE;
+                 const entityX = entity.x + (entity.isTower ? entity.width/2 : 0); const entityY = entity.y;
+                 if (distance(x, y, entityX, entityY) < (halfSize + entitySize / 2 + 10)) { return false; }
+            }
+            return true;
+        }
+
 
         function updateElixir() { /* ... (no changes) ... */
             if (gameOver || isTiebreakerActive) return;
             if (playerElixir < MAX_ELIXIR) { playerElixir = Math.min(MAX_ELIXIR, playerElixir + ELIXIR_REGEN_RATE); }
-            aiElixir += ELIXIR_REGEN_RATE; updateDisplays(); updateBattleButtons();
+            aiElixir = Math.min(MAX_ELIXIR, aiElixir + ELIXIR_REGEN_RATE);
+            updateDisplays(); updateBattleButtons();
         }
         function deployUnit(cardId, isPlayer) { /* ... (no changes) ... */
-             const card = getCardById(cardId);
-             if (!card || card.type !== 'unit') { console.error("Invalid unit type for deployment:", cardId); return; }
-             const kingTowerX = isPlayer ? playerTowers[1].x : enemyTowers[1].x;
-             const spawnXBase = kingTowerX + (isPlayer ? playerTowers[1].width + 20 : -20 - (card.stats.size || card.stats.unitStats?.size || 15));
-             const spawnYBase = canvas.height / 2;
-             if (card.stats.spawnCount && card.stats.unitStats) { // Multi-spawn
+             const card = getCardById(cardId); if (!card || card.type !== 'unit') { console.error("Invalid unit type for deployment:", cardId); return; }
+             const kingTower = isPlayer ? playerTowers[1] : enemyTowers[1];
+             const spawnXBase = kingTower.x + (isPlayer ? kingTower.width + 20 : -20 - (card.stats.size || card.stats.unitStats?.size || 15));
+             const spawnYBase = kingTower.y + (Math.random() * 80 - 40);
+             if (card.stats.spawnCount && card.stats.unitStats) {
                  const unitStats = card.stats.unitStats; const spawnCount = card.stats.spawnCount; const enemyColor = ENEMY_COLORS[cardId] || '#FFFFFF';
                  for (let i = 0; i < spawnCount; i++) {
                      const spawnYOffset = (Math.random() - 0.5) * 30 * spawnCount; const spawnXOffset = (Math.random() - 0.5) * 10;
                      const newUnit = { id: `${cardId}_${Date.now()}_${Math.random()}_${i}`, type: cardId, stats: { ...unitStats }, x: spawnXBase + spawnXOffset, y: spawnYBase + spawnYOffset, isPlayer: isPlayer, hp: unitStats.hp, maxHp: unitStats.maxHp, color: isPlayer ? unitStats.color : enemyColor, target: null, lastAttackTime: 0, };
                      if (isPlayer) playerUnits.push(newUnit); else enemyUnits.push(newUnit);
                  }
-             } else { // Single-spawn
+             } else {
                  const stats = card.stats; const enemyColor = ENEMY_COLORS[cardId] || '#FFFFFF';
-                 const newUnit = { id: `${cardId}_${Date.now()}_${Math.random()}`, type: cardId, stats: { ...stats }, x: spawnXBase, y: spawnYBase + (Math.random() * 40 - 20), isPlayer: isPlayer, hp: stats.hp, maxHp: stats.maxHp, color: isPlayer ? stats.color : enemyColor, target: null, lastAttackTime: 0, };
+                 const newUnit = { id: `${cardId}_${Date.now()}_${Math.random()}`, type: cardId, stats: { ...stats }, x: spawnXBase, y: spawnYBase, isPlayer: isPlayer, hp: stats.hp, maxHp: stats.maxHp, color: isPlayer ? stats.color : enemyColor, target: null, lastAttackTime: 0, };
                  if (isPlayer) playerUnits.push(newUnit); else enemyUnits.push(newUnit);
              }
+             console.log(`${isPlayer ? 'Player' : 'AI'} deployed ${card.name}`);
          }
-
-        // --- Targeting, Movement, Attack Logic (Added Attack Effects) ---
-        function findTarget(unit, potentialEnemyUnits, potentialEnemyTowers) { /* ... (no changes) ... */
-             let closestTarget = null; let minDistance = Infinity;
-             if (!unit || !unit.stats) return null; const unitRange = unit.stats.range;
-             potentialEnemyUnits.forEach(target => {
-                  if(!target || target.hp <= 0) return;
-                 const targetCenterX = target.x + (target.isTower ? target.width / 2 : 0); const targetCenterY = target.y;
-                 const d = distance(unit.x, unit.y, targetCenterX, targetCenterY);
-                 if (!target.isTower && d < minDistance && d <= unitRange) { minDistance = d; closestTarget = target; }
-             });
-             if (!closestTarget) {
-                 potentialEnemyTowers.forEach(targetTower => {
-                     if (!targetTower || targetTower.hp <= 0) return;
-                     const targetCenterX = targetTower.x + targetTower.width / 2; const targetCenterY = targetTower.y;
-                     const d = distance(unit.x, unit.y, targetCenterX, targetCenterY);
-                     if (d < minDistance && d <= unitRange) { minDistance = d; closestTarget = targetTower; }
-                 });
-             } return closestTarget;
+        function deployBuilding(cardId, isPlayer, x, y) { /* ... (no changes) ... */
+            const card = getCardById(cardId); if (!card || card.type !== 'building') { console.error("Invalid building type for deployment:", cardId); return; }
+            const stats = card.stats; const enemyColor = ENEMY_COLORS[cardId] || '#FFFFFF';
+            const newBuilding = { id: `${cardId}_${Date.now()}_${Math.random()}`, type: cardId, stats: { ...stats }, x: x, y: y, isPlayer: isPlayer, hp: stats.hp, maxHp: stats.maxHp, color: isPlayer ? stats.color : enemyColor, target: null, lastAttackTime: 0, spawnTime: Date.now(), isBuilding: true, width: stats.size, height: stats.size };
+            if (isPlayer) { playerBuildings.push(newBuilding); } else { enemyBuildings.push(newBuilding); }
+            console.log(`${isPlayer ? 'Player' : 'AI'} deployed building ${card.name}`);
         }
-         function findTowerTarget(tower, potentialEnemyUnits) { /* ... (no changes) ... */
-             let closestTarget = null; let minDistance = tower.range;
-             if (!tower || tower.hp <= 0) return null;
+
+
+        // --- Targeting, Movement, Attack Logic ---
+        function findTarget(unit, potentialEnemyUnits, potentialEnemyTowers, potentialEnemyBuildings) { /* ... (no changes) ... */
+             let closestTarget = null; let minDistance = Infinity; if (!unit || !unit.stats || unit.hp <= 0) return null;
+             const unitRange = unit.stats.range; const preference = unit.stats.targetPreference;
+             const canTargetAir = unit.stats.targets?.includes('air') ?? true; const canTargetGround = unit.stats.targets?.includes('ground') ?? true;
+             let preferredTargets = []; let otherTargets = [];
+             const allEnemies = [...potentialEnemyUnits, ...potentialEnemyTowers, ...potentialEnemyBuildings];
+             allEnemies.forEach(target => {
+                 if (!target || target.hp <= 0) return;
+                 const targetIsAir = target.stats?.isAir; const targetIsBuilding = target.isBuilding || target.isTower;
+                 if (targetIsAir && !canTargetAir) return; if (!targetIsAir && !canTargetGround) return;
+                 if (preference === 'building' && targetIsBuilding) { preferredTargets.push(target); }
+                 else if (preference !== 'building' || !targetIsBuilding) { otherTargets.push(target); }
+             });
+             preferredTargets.forEach(target => {
+                 const targetCenterX = target.x + (target.width ? target.width / 2 : 0); const targetCenterY = target.y;
+                 const d = distance(unit.x, unit.y, targetCenterX, targetCenterY); if (d < minDistance) { minDistance = d; closestTarget = target; }
+             });
+             if (!closestTarget || minDistance > unitRange) {
+                 if (minDistance > unitRange) minDistance = Infinity;
+                 otherTargets.forEach(target => {
+                     const targetCenterX = target.x + (target.width ? target.width / 2 : 0); const targetCenterY = target.y;
+                     const d = distance(unit.x, unit.y, targetCenterX, targetCenterY); if (d < minDistance) { minDistance = d; closestTarget = target; }
+                 });
+             }
+             if (closestTarget && minDistance > unitRange) { return null; }
+             return closestTarget;
+        }
+         function findTowerTarget(tower, potentialEnemyUnits, potentialEnemyBuildings) { /* ... (no changes) ... */
+             let closestTarget = null; let minDistance = tower.range; if (!tower || tower.hp <= 0) return null;
+             const canTargetAir = tower.targets?.includes('air'); const canTargetGround = tower.targets?.includes('ground');
+             const allEnemies = [...potentialEnemyUnits, ...potentialEnemyBuildings];
+             allEnemies.forEach(target => {
+                  if(!target || target.hp <= 0) return;
+                  const targetIsAir = target.stats?.isAir; if (targetIsAir && !canTargetAir) return; if (!targetIsAir && !canTargetGround) return;
+                 const targetCenterX = target.x + (target.isBuilding ? target.width / 2 : 0); const targetCenterY = target.y;
+                 const d = distance(tower.x + tower.width / 2, tower.y, targetCenterX, targetCenterY); if (d < minDistance) { minDistance = d; closestTarget = target; }
+             });
+             return closestTarget;
+         }
+         function findBuildingTarget(building, potentialEnemyUnits) { /* ... (no changes) ... */
+             let closestTarget = null; let minDistance = building.stats.range; if (!building || building.hp <= 0) return null;
+             const canTargetAir = building.stats.targets?.includes('air'); const canTargetGround = building.stats.targets?.includes('ground');
              potentialEnemyUnits.forEach(target => {
                   if(!target || target.hp <= 0) return;
-                 const d = distance(tower.x + tower.width / 2, tower.y, target.x, target.y);
-                 if (d < minDistance) { minDistance = d; closestTarget = target; }
-             }); return closestTarget;
+                  const targetIsAir = target.stats?.isAir; if (targetIsAir && !canTargetAir) return; if (!targetIsAir && !canTargetGround) return;
+                 const d = distance(building.x, building.y, target.x, target.y); if (d < minDistance) { minDistance = d; closestTarget = target; }
+             });
+             return closestTarget;
          }
-        // --- Modified updateUnits to add attack effects ---
-        function updateUnits(units, enemyUnitsList, enemyTowersList) { /* ... (no changes needed from previous version) ... */
-            if (isTiebreakerActive) return;
-            const currentTime = Date.now();
+        function updateUnits(units, enemyUnitsList, enemyTowersList, enemyBuildingsList) { /* ... (no changes) ... */
+            if (isTiebreakerActive) return; const currentTime = Date.now();
             for (let i = units.length - 1; i >= 0; i--) {
-                const unit = units[i];
-                 if (!unit || unit.hp <= 0 || !unit.stats) continue;
-                 let targetNeedsUpdate = !unit.target || unit.target.hp <= 0;
-                 if (targetNeedsUpdate) { unit.target = findTarget(unit, enemyUnitsList, enemyTowersList); }
+                const unit = units[i]; if (!unit || unit.hp <= 0 || !unit.stats) continue;
+                if (unit.isPushedBack && currentTime < unit.pushbackEndTime) {
+                    unit.x += unit.pushbackVelocityX; unit.y += unit.pushbackVelocityY;
+                    unit.x = Math.max(unit.stats.size / 2, Math.min(canvas.width - unit.stats.size / 2, unit.x));
+                    unit.y = Math.max(unit.stats.size / 2, Math.min(canvas.height - unit.stats.size / 2, unit.y)); continue;
+                } else if (unit.isPushedBack) { unit.isPushedBack = false; }
+                 let targetNeedsUpdate = !unit.target || unit.target.hp <= 0; if (targetNeedsUpdate) { unit.target = findTarget(unit, enemyUnitsList, enemyTowersList, enemyBuildingsList); }
                 let isAttacking = false;
                 if (unit.target) {
-                    const targetWidth = unit.target.isTower ? unit.target.width : (unit.target.stats ? unit.target.stats.size : 0);
+                    const targetWidth = unit.target.width || (unit.target.stats ? unit.target.stats.size : 0);
                     const targetCenterX = unit.target.x + (targetWidth / 2); const targetCenterY = unit.target.y;
                     const distToTarget = distance(unit.x, unit.y, targetCenterX, targetCenterY);
                     if (distToTarget <= unit.stats.range) {
                         isAttacking = true;
                         if (currentTime - unit.lastAttackTime >= unit.stats.attackSpeed) {
-                             if (unit.stats.range > 30) { // Ranged Attack
-                                 projectiles.push({ x: unit.x, y: unit.y, target: unit.target, speed: 5, damage: unit.stats.damage, color: unit.color, size: 5, isPlayerProjectile: unit.isPlayer });
-                                 attackEffects.push({ type: 'flash', x: unit.x, y: unit.y, radius: unit.stats.size / 3, duration: 100, startTime: currentTime });
-                             } else { // Melee Attack
-                                 unit.target.hp -= unit.stats.damage;
-                                 const angleToTarget = Math.atan2(targetCenterY - unit.y, targetCenterX - unit.x);
-                                 const slashLength = unit.stats.size * 0.8;
-                                 attackEffects.push({ type: 'slash', x1: unit.x + Math.cos(angleToTarget - Math.PI / 6) * unit.stats.size * 0.4, y1: unit.y + Math.sin(angleToTarget - Math.PI / 6) * unit.stats.size * 0.4, x2: unit.x + Math.cos(angleToTarget + Math.PI / 6) * slashLength, y2: unit.y + Math.sin(angleToTarget + Math.PI / 6) * slashLength, duration: 150, startTime: currentTime });
-                             }
-                             unit.lastAttackTime = currentTime;
-                             if (unit.target.hp <= 0) { unit.target = null; isAttacking = false; }
+                             if (unit.stats.range > 30) { /* Ranged Attack */ projectiles.push({ x: unit.x, y: unit.y, target: unit.target, speed: 5, damage: unit.stats.damage, color: unit.color, size: 5, isPlayerProjectile: unit.isPlayer }); attackEffects.push({ type: 'flash', x: unit.x, y: unit.y, radius: unit.stats.size / 3, duration: 100, startTime: currentTime }); }
+                             else { /* Melee Attack */ unit.target.hp -= unit.stats.damage; const angleToTarget = Math.atan2(targetCenterY - unit.y, targetCenterX - unit.x); const slashLength = unit.stats.size * 0.8; attackEffects.push({ type: 'slash', x1: unit.x + Math.cos(angleToTarget - Math.PI / 6) * unit.stats.size * 0.4, y1: unit.y + Math.sin(angleToTarget - Math.PI / 6) * unit.stats.size * 0.4, x2: unit.x + Math.cos(angleToTarget + Math.PI / 6) * slashLength, y2: unit.y + Math.sin(angleToTarget + Math.PI / 6) * slashLength, duration: 150, startTime: currentTime }); }
+                             unit.lastAttackTime = currentTime; if (unit.target.hp <= 0) { unit.target = null; isAttacking = false; }
                         }
-                    } else { unit.target = null; }
+                    } else { unit.target = null; isAttacking = false; }
                 }
-                 if (!isAttacking) { const direction = unit.isPlayer ? 1 : -1; unit.x += unit.stats.speed * direction; }
+                 if (!isAttacking) {
+                     let moveTarget = unit.target; if (!moveTarget) { moveTarget = findTarget(unit, enemyUnitsList, enemyTowersList, enemyBuildingsList); }
+                     if (moveTarget) { const targetCenterX = moveTarget.x + (moveTarget.width ? moveTarget.width / 2 : 0); const angle = Math.atan2(moveTarget.y - unit.y, targetCenterX - unit.x); unit.x += Math.cos(angle) * unit.stats.speed; unit.y += Math.sin(angle) * unit.stats.speed; }
+                     else { const direction = unit.isPlayer ? 1 : -1; unit.x += unit.stats.speed * direction; }
+                 }
+                 unit.x = Math.max(unit.stats.size / 2, Math.min(canvas.width - unit.stats.size / 2, unit.x));
+                 unit.y = Math.max(unit.stats.size / 2, Math.min(canvas.height - unit.stats.size / 2, unit.y));
             }
         }
-        // --- Modified updateTowers to add attack effects ---
-         function updateTowers(towers, enemyUnitsList) { /* ... (no changes needed from previous version) ... */
-             if (isTiebreakerActive) return;
-             const currentTime = Date.now();
+         function updateTowers(towers, enemyUnitsList, enemyBuildingsList) { /* ... (no changes) ... */
+             if (isTiebreakerActive) return; const currentTime = Date.now();
              towers.forEach(tower => {
                  if (tower.hp > 0) {
-                     const target = findTowerTarget(tower, enemyUnitsList);
+                     const target = findTowerTarget(tower, enemyUnitsList, enemyBuildingsList);
                      if (target && currentTime - tower.lastAttackTime >= tower.attackSpeed) {
-                         const projectileStartX = tower.x + tower.width / 2 + (tower.isPlayer ? 10 : -10);
+                         const projectileStartX = tower.x + tower.width / 2;
                          projectiles.push({ x: projectileStartX, y: tower.y, target: target, speed: 6, damage: tower.damage, color: tower.color, size: 6, isPlayerProjectile: tower.color === playerTowers[1].color });
-                         tower.lastAttackTime = currentTime;
-                         attackEffects.push({ type: 'flash', x: projectileStartX, y: tower.y, radius: 4, duration: 100, startTime: currentTime });
+                         tower.lastAttackTime = currentTime; attackEffects.push({ type: 'flash', x: projectileStartX, y: tower.y, radius: 4, duration: 100, startTime: currentTime });
                      }
                  }
              });
          }
+         function updateBuildings(buildings, enemyUnitsList) { /* ... (no changes) ... */
+             if (isTiebreakerActive) return; const currentTime = Date.now();
+             for (let i = buildings.length - 1; i >= 0; i--) {
+                 const building = buildings[i]; if (!building || building.hp <= 0) continue;
+                 if (currentTime - building.spawnTime > building.stats.lifetime) {
+                     building.hp = 0; console.log(`${building.type} ${building.id} expired.`);
+                     attackEffects.push({ type: 'flash', x: building.x, y: building.y, radius: building.stats.size / 2, duration: 300, startTime: currentTime }); continue;
+                 }
+                 const target = findBuildingTarget(building, enemyUnitsList);
+                 if (target && currentTime - building.lastAttackTime >= building.stats.attackSpeed) {
+                     const projectileStartX = building.x; const projectileStartY = building.y;
+                     projectiles.push({ x: projectileStartX, y: projectileStartY, target: target, speed: 7, damage: building.stats.damage, color: building.color, size: 7, isPlayerProjectile: building.isPlayer });
+                     building.lastAttackTime = currentTime; attackEffects.push({ type: 'flash', x: projectileStartX, y: projectileStartY, radius: 5, duration: 100, startTime: currentTime });
+                 }
+             }
+         }
+
+        // --- *** MODIFIED: updateLogProjectiles Logic with DEBUG LOGS COMMENTED OUT *** ---
+        function updateLogProjectiles(logProjectilesList, enemyUnitsList, playerUnitsList) {
+            if (isTiebreakerActive) return;
+            const currentTime = Date.now();
+
+            for (let i = logProjectilesList.length - 1; i >= 0; i--) {
+                const log = logProjectilesList[i];
+                if (!log) continue;
+
+                // Move the log
+                log.x += log.stats.speed * log.direction;
+
+                // Check for collisions with ground units
+                const unitsToCheck = log.direction === 1 ? enemyUnitsList : playerUnitsList;
+                const logRect = {
+                    x: log.x - 30, // Visual length/2
+                    y: log.y - log.stats.width / 2,
+                    width: 60, // Visual length
+                    height: log.stats.width
+                };
+
+                unitsToCheck.forEach(unit => {
+                    // --- DIAGNOSTIC LOG 1 (Commented Out) ---
+                    // console.log(`Log Check: Unit ${unit?.id} (${unit?.type}), HP=${unit?.hp}, isGround=${isGroundUnit(unit)}, alreadyHit=${log.hitTargets.includes(unit?.id)}`);
+
+                    if (!unit || unit.hp <= 0 || !isGroundUnit(unit) || log.hitTargets.includes(unit.id)) return; // Skip air, dead, or already hit units
+
+                    const unitRect = {
+                        x: unit.x - unit.stats.size / 2,
+                        y: unit.y - unit.stats.size / 2,
+                        width: unit.stats.size,
+                        height: unit.stats.size
+                    };
+
+                    // --- DIAGNOSTIC LOG 2 (Commented Out) ---
+                    // console.log(`Log Collision Check: Log Rect (x:${logRect.x.toFixed(1)}, y:${logRect.y.toFixed(1)}, w:${logRect.width}, h:${logRect.height}) vs Unit ${unit.id} Rect (x:${unitRect.x.toFixed(1)}, y:${unitRect.y.toFixed(1)}, w:${unitRect.width}, h:${unitRect.height})`);
+
+                    // Simple AABB collision check
+                    if (logRect.x < unitRect.x + unitRect.width &&
+                        logRect.x + logRect.width > unitRect.x &&
+                        logRect.y < unitRect.y + unitRect.height &&
+                        logRect.y + logRect.height > unitRect.y)
+                    {
+                        // --- DIAGNOSTIC LOG 3 (Commented Out) ---
+                        // console.log(`%c!!! LOG HIT DETECTED: Log ${log.id} hit Unit ${unit.id} !!!`, "color: lime; font-weight: bold;");
+
+                        // Collision detected!
+                        unit.hp -= log.stats.damage; // Apply Damage
+                        log.hitTargets.push(unit.id); // Prevent hitting the same unit multiple times
+                        // console.log(`   -> Unit ${unit.id} HP after Log hit: ${unit.hp.toFixed(0)}`); // Keep this log maybe?
+
+                        // Apply pushback
+                        const pushbackAngle = Math.atan2(unit.y - log.y, unit.x - log.x); // Push away from log center
+                        const pushSpeed = log.stats.pushbackStrength;
+                        unit.isPushedBack = true;
+                        unit.pushbackEndTime = currentTime + log.stats.pushbackDuration;
+                        unit.pushbackVelocityX = Math.cos(pushbackAngle) * pushSpeed;
+                        unit.pushbackVelocityY = Math.sin(pushbackAngle) * pushSpeed;
+
+                        // Add hit flash
+                        attackEffects.push({ type: 'flash', x: unit.x, y: unit.y, radius: unit.stats.size / 2, duration: 150, startTime: currentTime });
+                    }
+                });
+
+                // Remove log if it travels its distance or goes off-screen
+                const distanceTraveled = Math.abs(log.x - log.startX);
+                if (distanceTraveled >= log.stats.travelDistance || log.x < -logRect.width || log.x > canvas.width + logRect.width) {
+                    logProjectilesList.splice(i, 1);
+                }
+            }
+        }
+
+
         function updateProjectiles() { /* ... (no changes) ... */
              if (isTiebreakerActive) return;
             for (let i = projectiles.length - 1; i >= 0; i--) {
                 const p = projectiles[i];
                 if (!p.target || p.target.hp <= 0) { projectiles.splice(i, 1); continue; }
-                const targetWidth = p.target.isTower ? p.target.width : (p.target.stats ? p.target.stats.size : 0);
-                const targetX = p.target.x + targetWidth / 2; const targetY = p.target.y;
+                const targetWidth = p.target.isTower || p.target.isBuilding ? p.target.width : (p.target.stats ? p.target.stats.size : 0);
+                const targetX = p.target.x + (targetWidth / 2); const targetY = p.target.y;
                 const angle = Math.atan2(targetY - p.y, targetX - p.x);
                 p.x += Math.cos(angle) * p.speed; p.y += Math.sin(angle) * p.speed;
-                const hitRadius = p.target.isTower ? p.target.width / 2 : (p.target.stats ? p.target.stats.size / 2 : 10);
-                if (distance(p.x, p.y, targetX, targetY) < hitRadius) { p.target.hp -= p.damage; projectiles.splice(i, 1); }
+                const hitRadius = (targetWidth || p.target.stats?.size || 10) / 2 * 0.8;
+                if (distance(p.x, p.y, targetX, targetY) < hitRadius) {
+                     p.target.hp -= p.damage;
+                     attackEffects.push({ type: 'flash', x: targetX, y: targetY, radius: hitRadius * 1.5, duration: 100, startTime: Date.now() });
+                     projectiles.splice(i, 1);
+                 }
                  else if (p.x < -p.size || p.x > canvas.width + p.size || p.y < -p.size || p.y > canvas.height + p.size) { projectiles.splice(i, 1); }
             }
         }
          function cleanupDeadUnits() { /* ... (no changes) ... */
              playerUnits = playerUnits.filter(unit => unit && unit.hp > 0);
              enemyUnits = enemyUnits.filter(unit => unit && unit.hp > 0);
+             playerBuildings = playerBuildings.filter(building => building && building.hp > 0);
+             enemyBuildings = enemyBuildings.filter(building => building && building.hp > 0);
          }
-         // --- Added function to update attack effects ---
-         function updateAttackEffects(currentTime) {
+         function updateAttackEffects(currentTime) { /* ... (no changes) ... */
              attackEffects = attackEffects.filter(effect => currentTime - effect.startTime <= effect.duration);
          }
-        function simpleAI() { /* ... (no changes) ... */
-             if (gameOver || isTiebreakerActive) return;
-             const deployableUnitCards = FULL_CARD_LIBRARY.filter(card => card.implemented && card.type === 'unit');
-             if (deployableUnitCards.length === 0) return;
-             const randomCard = deployableUnitCards[Math.floor(Math.random() * deployableUnitCards.length)];
-             if (aiElixir >= randomCard.cost) { deployUnit(randomCard.id, false); }
+         function simpleAI() { /* ... (no changes) ... */
+             if (gameOver || isTiebreakerActive || isPlacingBuilding || isTargetingSpell) return;
+             if (aiElixir >= getCardById('cannon').cost) {
+                  let needsDefense = false; playerUnits.forEach(unit => { if (distance(unit.x, unit.y, enemyTowers[1].x + enemyTowers[1].width/2, enemyTowers[1].y) < 250) { needsDefense = true; } });
+                  if (needsDefense && enemyBuildings.length < 2) {
+                      const placeX = enemyTowers[1].x - 50; const placeY = canvas.height / 2 + (Math.random() * 100 - 50);
+                      if (isValidPlacement(placeX, placeY, false)) {
+                          aiElixir -= getCardById('cannon').cost; deployBuilding('cannon', false, placeX, placeY); console.log("AI deployed defensive Cannon"); updateDisplays(); updateBattleButtons(); return;
+                      }
+                  }
+             }
+             if (aiElixir >= getCardById('hogrider').cost + 3 && Math.random() < 0.3) {
+                 aiElixir -= getCardById('hogrider').cost; deployUnit('hogrider', false); console.log("AI deployed Hog Rider"); updateDisplays(); updateBattleButtons(); return;
+             }
+             const deployableUnitCards = FULL_CARD_LIBRARY.filter(card => card.implemented && card.type === 'unit' && card.id !== 'hogrider'); if (deployableUnitCards.length === 0) return;
+             const affordableCards = deployableUnitCards.filter(card => aiElixir >= card.cost);
+             if (affordableCards.length > 0) {
+                 const randomCard = affordableCards[Math.floor(Math.random() * affordableCards.length)]; aiElixir -= randomCard.cost; deployUnit(randomCard.id, false); updateDisplays(); updateBattleButtons();
+             }
          }
+
 
          // --- Game Over Check ---
          function checkGameOver(timeUp = false) { /* ... (no changes) ... */
              if (gameOver) return; let winner = null;
              const playerKingTower = playerTowers[1]; const enemyKingTower = enemyTowers[1];
-             if (enemyKingTower.hp <= 0) { winner = 'Player'; }
-             else if (playerKingTower.hp <= 0) { winner = 'Enemy'; }
+             if (enemyKingTower.hp <= 0) { winner = 'Player'; } else if (playerKingTower.hp <= 0) { winner = 'Enemy'; }
              else if (timeUp && !isTiebreakerActive) {
                  console.log("Time's up! Checking tower HP for tiebreaker.");
-                 if (playerKingTower.hp > enemyKingTower.hp) { winner = 'Player'; }
-                 else if (enemyKingTower.hp > playerKingTower.hp) { winner = 'Enemy'; }
-                 else { startTiebreaker(); return; }
+                 if (playerKingTower.hp > enemyKingTower.hp) { winner = 'Player'; } else if (enemyKingTower.hp > playerKingTower.hp) { winner = 'Enemy'; } else { startTiebreaker(); return; }
              }
              if (winner) {
                  gameOver = true; stopGameTimers(); console.log("Game Over! Winner:", winner);
-                 if (winner === 'Player') { showMessage("You Win!"); }
-                 else if (winner === 'Enemy') { showMessage("You Lose!"); }
-                 updateBattleButtons();
-                 console.log("Switching back to deck builder in 3 seconds...");
-                 setTimeout(switchToDeckBuilder, 3000);
+                 if (winner === 'Player') { showMessage("You Win!"); } else if (winner === 'Enemy') { showMessage("You Lose!"); }
+                 updateBattleButtons(); console.log("Switching back to deck builder in 3 seconds..."); setTimeout(switchToDeckBuilder, 3000);
              }
          }
 
          // --- Tiebreaker Functions ---
          function startTiebreaker() { /* ... (no changes) ... */
-             if (isTiebreakerActive) return;
-             console.log("TIEBREAKER STARTED!");
-             isTiebreakerActive = true;
-             clearInterval(elixirIntervalId); elixirIntervalId = null;
-             clearInterval(aiIntervalId); aiIntervalId = null;
-             clearInterval(gameTimerIntervalId); gameTimerIntervalId = null;
-             playerUnits = []; enemyUnits = []; projectiles = []; attackEffects = []; // Clear effects too
-             updateBattleButtons();
-             showMessage("TIEBREAKER!"); setTimeout(hideMessage, 2000);
-             if (tiebreakerIntervalId) clearInterval(tiebreakerIntervalId);
-             tiebreakerIntervalId = setInterval(drainTowerHp, TIEBREAKER_DRAIN_INTERVAL);
+             if (isTiebreakerActive) return; console.log("TIEBREAKER STARTED!"); isTiebreakerActive = true;
+             clearInterval(elixirIntervalId); elixirIntervalId = null; clearInterval(aiIntervalId); aiIntervalId = null; clearInterval(gameTimerIntervalId); gameTimerIntervalId = null;
+             playerUnits = []; enemyUnits = []; projectiles = []; logProjectiles = []; playerBuildings = []; enemyBuildings = []; attackEffects = [];
+             updateBattleButtons(); showMessage("TIEBREAKER!"); setTimeout(hideMessage, 2000);
+             if (tiebreakerIntervalId) clearInterval(tiebreakerIntervalId); tiebreakerIntervalId = setInterval(drainTowerHp, TIEBREAKER_DRAIN_INTERVAL);
          }
          function drainTowerHp() { /* ... (no changes) ... */
-             if (!isTiebreakerActive || gameOver) { stopGameTimers(); return; }
-             const drainAmount = TIEBREAKER_HP_DRAIN_RATE * (TIEBREAKER_DRAIN_INTERVAL / 1000);
-             playerTowers[1].hp -= drainAmount;
-             enemyTowers[1].hp -= drainAmount;
-             updateDisplays();
-             checkGameOver();
+             if (!isTiebreakerActive || gameOver) { stopGameTimers(); return; } const drainAmount = TIEBREAKER_HP_DRAIN_RATE;
+             playerTowers[1].hp -= drainAmount; enemyTowers[1].hp -= drainAmount; updateDisplays(); checkGameOver();
          }
 
          // --- stopGameTimers ---
         function stopGameTimers() { /* ... (no changes) ... */
-             clearInterval(elixirIntervalId); elixirIntervalId = null;
-             clearInterval(aiIntervalId); aiIntervalId = null;
-             clearInterval(gameTimerIntervalId); gameTimerIntervalId = null;
-             clearInterval(tiebreakerIntervalId); tiebreakerIntervalId = null;
-             cancelAnimationFrame(animationFrameId); animationFrameId = null;
-             isTargetingSpell = false; currentSpellType = null; if(canvas) canvas.style.cursor = 'default';
-             if(canvas) canvas.removeEventListener('mousedown', handleSpellCast);
-             if(canvas) canvas.removeEventListener('mousemove', updateTargetingIndicator);
-             if (targetingIndicator) targetingIndicator.style.display = 'none';
+             clearInterval(elixirIntervalId); elixirIntervalId = null; clearInterval(aiIntervalId); aiIntervalId = null; clearInterval(gameTimerIntervalId); gameTimerIntervalId = null; clearInterval(tiebreakerIntervalId); tiebreakerIntervalId = null;
+             if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
+             isTargetingSpell = false; currentSpellType = null; isPlacingBuilding = false; currentBuildingType = null;
+             if(canvas) { canvas.style.cursor = 'default'; canvas.removeEventListener('mousemove', updateTargetingIndicator); canvas.removeEventListener('mousemove', updatePlacementIndicator); }
+             if (targetingIndicator) targetingIndicator.style.display = 'none'; if (placementIndicator) placementIndicator.style.display = 'none';
+             console.log("Game timers and animation frame stopped.");
         }
 
         // --- Timer Logic ---
         function startGameTimer() { /* ... (no changes) ... */
-            gameTimeRemaining = BATTLE_DURATION_SECONDS; updateTimerDisplay();
-            if (gameTimerIntervalId) clearInterval(gameTimerIntervalId);
-            gameTimerIntervalId = setInterval(() => {
-                if (gameOver) { stopGameTimers(); return; }
-                gameTimeRemaining--; updateTimerDisplay();
-                if (gameTimeRemaining <= 0 && !gameOver) { checkGameOver(true); }
-            }, 1000);
+            gameTimeRemaining = BATTLE_DURATION_SECONDS; updateTimerDisplay(); if (gameTimerIntervalId) clearInterval(gameTimerIntervalId);
+            gameTimerIntervalId = setInterval(() => { if (gameOver) { stopGameTimers(); return; } gameTimeRemaining--; updateTimerDisplay(); if (gameTimeRemaining <= 0 && !gameOver && !isTiebreakerActive) { checkGameOver(true); } }, 1000);
         }
         function updateTimerDisplay() { /* ... (no changes) ... */
-            if (!gameTimerDisplay) return;
-            const minutes = Math.floor(Math.max(0, gameTimeRemaining) / 60);
-            const seconds = Math.max(0, gameTimeRemaining) % 60;
-            gameTimerDisplay.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+            if (!gameTimerDisplay) return; const minutes = Math.floor(Math.max(0, gameTimeRemaining) / 60); const seconds = Math.max(0, gameTimeRemaining) % 60; gameTimerDisplay.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
         }
 
         // --- Displays and Buttons ---
@@ -707,145 +994,76 @@
             const enemyKingHp = enemyTowers[1] ? Math.max(0, Math.round(enemyTowers[1].hp)) : 'N/A';
             playerTowerHpDisplay.textContent = `King HP: ${playerKingHp}/${KING_TOWER_HP}`;
             enemyTowerHpDisplay.textContent = `King HP: ${enemyKingHp}/${KING_TOWER_HP}`;
-            const elixirPercentage = (playerElixir / MAX_ELIXIR) * 100;
-            playerElixirBarFill.style.width = `${elixirPercentage}%`;
+            const elixirPercentage = (playerElixir / MAX_ELIXIR) * 100; playerElixirBarFill.style.width = `${elixirPercentage}%`;
         }
          function updateBattleButtons() { /* ... (no changes) ... */
              const buttons = battleControlsContainer ? battleControlsContainer.querySelectorAll('.deploy-button') : [];
              buttons.forEach(button => {
-                 const cardId = button.dataset.id;
-                 const card = getCardById(cardId);
-                 if (card) { button.disabled = !card.implemented || playerElixir < card.cost || gameOver || isTiebreakerActive || isTargetingSpell; }
-                  else { button.disabled = true; }
+                 const cardId = button.dataset.id; const card = getCardById(cardId);
+                 if (card) { button.disabled = !card.implemented || playerElixir < card.cost || gameOver || isTiebreakerActive || isTargetingSpell || isPlacingBuilding; }
+                 else { button.disabled = true; }
              });
          }
-        function showMessage(text) { if(messageBox) { messageBox.textContent = text; messageBox.style.display = 'block'; } }
-        function hideMessage() { if(messageBox) messageBox.style.display = 'none'; }
+        function showMessage(text) { /* ... (no changes) ... */ if(messageBox) { messageBox.textContent = text; messageBox.style.display = 'block'; } }
+        function hideMessage() { /* ... (no changes) ... */ if(messageBox) messageBox.style.display = 'none'; }
 
-        // --- Game Loop (Modified) ---
-        function gameLoop() {
-            if (gameOver) { animationFrameId = null; return; }
-            const currentTime = Date.now();
-            if (!ctx) { console.error("Canvas context lost during loop!"); stopGameTimers(); return; }
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            try {
+        // --- Game Loop ---
+        function gameLoop() { /* ... (no changes) ... */
+            if (gameOver) { animationFrameId = null; return; } const currentTime = Date.now(); if (!ctx) { console.error("Canvas context lost during loop!"); stopGameTimers(); return; }
+            try { /* Update Phase */
                 if (!isTiebreakerActive) {
-                    updateProjectiles();
-                    updateUnits(playerUnits, enemyUnits, enemyTowers);
-                    updateUnits(enemyUnits, playerUnits, playerTowers);
-                    updateTowers(playerTowers, enemyUnits);
-                    updateTowers(enemyTowers, playerUnits);
-                    cleanupDeadUnits();
-                }
-                updateAttackEffects(currentTime); // <-- Update effects (remove expired ones)
-                updateDisplays();
+                    updateProjectiles(); updateLogProjectiles(logProjectiles, enemyUnits, playerUnits);
+                    updateUnits(playerUnits, enemyUnits, enemyTowers, enemyBuildings); updateUnits(enemyUnits, playerUnits, playerTowers, playerBuildings);
+                    updateTowers(playerTowers, enemyUnits, enemyBuildings); updateTowers(enemyTowers, playerUnits, playerBuildings);
+                    updateBuildings(playerBuildings, enemyUnits); updateBuildings(enemyBuildings, playerUnits); cleanupDeadUnits();
+                } updateAttackEffects(currentTime); updateDisplays();
             } catch (error) { console.error("Error during game update:", error); stopGameTimers(); showMessage("An error occurred!"); return; }
+            ctx.clearRect(0, 0, canvas.width, canvas.height); /* Drawing Phase */
             try {
-                playerTowers.forEach(drawTower); enemyTowers.forEach(drawTower);
-                if (!isTiebreakerActive) {
-                    playerUnits.forEach(drawUnit); enemyUnits.forEach(drawUnit);
-                    projectiles.forEach(drawProjectile);
-                } else {
-                    // Draw Tiebreaker HP Drain Animation
-                    tiebreakerEffectCounter++;
-                    if (tiebreakerEffectCounter % 30 < 15) { // Flash approx every half second
-                         [playerTowers[1], enemyTowers[1]].forEach(kingTower => {
-                             if (kingTower && kingTower.hp > 0) {
-                                 // Overlay
-                                 ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
-                                 ctx.fillRect(kingTower.x, kingTower.y - kingTower.height / 2, kingTower.width, kingTower.height);
-                                 // Sparks
-                                 for(let i=0; i<2; i++) {
-                                     ctx.fillStyle = `rgba(255, ${Math.random()*100 + 155}, 0, 0.9)`; // Brighter Orange/Red sparks
-                                     ctx.beginPath();
-                                     ctx.arc(
-                                         kingTower.x + Math.random() * kingTower.width, // Random x within tower
-                                         kingTower.y + (Math.random() - 0.5) * kingTower.height, // Random y within tower
-                                         Math.random() * 2 + 2, // Spark size
-                                         0, Math.PI*2
-                                     );
-                                     ctx.fill();
-                                 }
-                             }
-                         });
-                    }
-                }
-                drawAttackEffects(); // <-- Draw active attack effects
+                playerTowers.forEach(drawTower); enemyTowers.forEach(drawTower); playerBuildings.forEach(drawBuilding); enemyBuildings.forEach(drawBuilding);
+                if (!isTiebreakerActive) { playerUnits.forEach(drawUnit); enemyUnits.forEach(drawUnit); projectiles.forEach(drawProjectile); logProjectiles.forEach(drawLogProjectile); }
+                else { /* Tiebreaker drawing */ tiebreakerEffectCounter++; if (tiebreakerEffectCounter % 30 < 15) { /* ... */ } } drawAttackEffects();
             } catch (error) { console.error("Error during game drawing:", error); stopGameTimers(); showMessage("An error occurred during drawing!"); return; }
-             if (!isTiebreakerActive) { checkGameOver(false); }
-            if (!gameOver) { animationFrameId = requestAnimationFrame(gameLoop); }
-             else { animationFrameId = null; }
+            if (!isTiebreakerActive) { checkGameOver(false); } /* Post-Draw Checks */
+            if (!gameOver) { animationFrameId = requestAnimationFrame(gameLoop); } else { animationFrameId = null; } /* Loop Continuation */
         }
 
+
         // --- Initialization ---
-        function initializeGame() {
-             console.log("Initializing Battle...");
-             gameOver = false; playerElixir = 3; aiElixir = AI_STARTING_ELIXIR;
-             playerUnits = []; enemyUnits = []; projectiles = []; attackEffects = []; // <-- Reset attack effects
-             playerTowers = createTowers(true); enemyTowers = createTowers(false);
-             gameTimeRemaining = BATTLE_DURATION_SECONDS;
-             isTiebreakerActive = false; tiebreakerEffectCounter = 0;
-             isTargetingSpell = false; currentSpellType = null;
-
-             hideMessage();
-             stopGameTimers();
-
-             populateBattleControls();
-             updateDisplays(); updateBattleButtons();
-
-             if (ctx) {
-                 console.log("Drawing initial towers..."); ctx.clearRect(0, 0, canvas.width, canvas.height);
-                 playerTowers.forEach(drawTower); enemyTowers.forEach(drawTower);
-             } else { console.error("Cannot draw initial state - context missing."); return; }
-
-             console.log("Starting game intervals and loop...");
-             elixirIntervalId = setInterval(updateElixir, ELIXIR_REGEN_INTERVAL);
-             aiIntervalId = setInterval(simpleAI, AI_DEPLOY_INTERVAL);
-             startGameTimer();
-             if (animationFrameId) cancelAnimationFrame(animationFrameId);
-             animationFrameId = requestAnimationFrame(gameLoop);
-             console.log("Battle Started!");
+        function initializeGame() { /* ... (no changes) ... */
+             console.log("Initializing Battle..."); gameOver = false; playerElixir = 3; aiElixir = AI_STARTING_ELIXIR;
+             playerUnits = []; enemyUnits = []; playerBuildings = []; enemyBuildings = []; projectiles = []; logProjectiles = []; attackEffects = [];
+             playerTowers = createTowers(true); enemyTowers = createTowers(false); gameTimeRemaining = BATTLE_DURATION_SECONDS;
+             isTiebreakerActive = false; tiebreakerEffectCounter = 0; isTargetingSpell = false; currentSpellType = null; isPlacingBuilding = false; currentBuildingType = null;
+             hideMessage(); stopGameTimers(); populateBattleControls(); updateDisplays(); updateBattleButtons();
+             if (ctx) { console.log("Drawing initial state..."); ctx.clearRect(0, 0, canvas.width, canvas.height); playerTowers.forEach(drawTower); enemyTowers.forEach(drawTower); }
+             else { console.error("Cannot draw initial state - context missing."); return; }
+             console.log("Starting game intervals and loop..."); elixirIntervalId = setInterval(updateElixir, ELIXIR_REGEN_INTERVAL); aiIntervalId = setInterval(simpleAI, AI_DEPLOY_INTERVAL); startGameTimer();
+             if (animationFrameId) cancelAnimationFrame(animationFrameId); animationFrameId = requestAnimationFrame(gameLoop); console.log("Battle Started!");
         }
 
         // --- Screen Switching Logic ---
         function switchToDeckBuilder() { /* ... (no changes) ... */
-            console.log("Switching to Deck Builder...");
-            stopGameTimers();
-            hideMessage();
-            if (deckBuilderScreen) deckBuilderScreen.classList.add('active');
-            if (battleScreen) battleScreen.classList.remove('active');
-            renderSelectedDeck();
+            console.log("Switching to Deck Builder..."); stopGameTimers(); hideMessage(); if (deckBuilderScreen) deckBuilderScreen.classList.add('active'); if (battleScreen) battleScreen.classList.remove('active'); renderSelectedDeck();
         }
         function switchToBattle() { /* ... (no changes) ... */
-            if (selectedDeck.length !== DECK_SIZE) {
-                console.warn("Cannot start battle: Deck not full.");
-                alert(`Please select exactly ${DECK_SIZE} cards for your deck!`);
-                return;
-            }
-            console.log("Switching to Battle Screen...");
-            if (deckBuilderScreen) deckBuilderScreen.classList.remove('active');
-            if (battleScreen) battleScreen.classList.add('active');
-            initializeGame();
+            if (selectedDeck.length !== DECK_SIZE) { showMessage(`Please select exactly ${DECK_SIZE} cards!`); setTimeout(hideMessage, 2500); return; }
+            console.log("Switching to Battle Screen..."); if (deckBuilderScreen) deckBuilderScreen.classList.remove('active'); if (battleScreen) battleScreen.classList.add('active'); initializeGame();
         }
 
-        // --- Event Listeners ---
-        // Setup listeners after populating controls
-        function setupDeployButtonListeners() { /* ... (no changes needed from previous fix) ... */
+        // --- Event Listeners Setup ---
+        function setupDeployButtonListeners() { /* ... (no changes) ... */
             const buttons = battleControlsContainer ? battleControlsContainer.querySelectorAll('.deploy-button') : [];
             buttons.forEach(button => {
-                 const newButton = button.cloneNode(true);
-                 button.parentNode.replaceChild(newButton, button);
-                 const cardId = newButton.dataset.id;
-                 const card = getCardById(cardId);
+                 const newButton = button.cloneNode(true); button.parentNode.replaceChild(newButton, button);
+                 const cardId = newButton.dataset.id; const cardType = newButton.dataset.type; const cardCost = parseInt(newButton.dataset.cost || '99'); const card = getCardById(cardId);
                  if (card && card.implemented) {
-                     newButton.addEventListener('click', () => {
-                         if (!gameOver && !isTiebreakerActive && !isTargetingSpell && card.implemented && playerElixir >= card.cost) {
-                             console.log(`Attempting Deploy: ${cardId}. Elixir=${playerElixir}, Cost=${card.cost}`);
-                             playerElixir -= card.cost;
-                             console.log(`Elixir After Deploy: ${playerElixir}`);
-                             updateDisplays(); updateBattleButtons();
-                             handleDeployAction(cardId);
-                         } else { console.log(`Cannot deploy ${cardId}. Elixir: ${playerElixir}, Cost: ${card?.cost}, Implemented: ${card?.implemented}, Game Over: ${gameOver}, Tiebreaker: ${isTiebreakerActive}, Targeting: ${isTargetingSpell}`); }
+                     newButton.addEventListener('click', (event) => {
+                         if (!gameOver && !isTiebreakerActive && !isTargetingSpell && !isPlacingBuilding && card.implemented && playerElixir >= cardCost) {
+                             console.log(`Attempting Use: ${cardId}. Type: ${cardType}. Elixir=${playerElixir}, Cost=${cardCost}`); playerElixir -= cardCost; updateDisplays(); updateBattleButtons();
+                             const rect = canvas.getBoundingClientRect(); const clickX = event ? event.clientX - rect.left : PLAYER_SIDE_X_LIMIT / 2; const clickY = event ? event.clientY - rect.top : canvas.height / 2;
+                             handleDeployAction(cardId, clickX, clickY);
+                         } else { console.log(`Cannot use ${cardId}. Conditions: Elixir=${playerElixir}, Cost=${cardCost}, Implemented=${card?.implemented}, GameOver=${gameOver}, Tiebreaker=${isTiebreakerActive}, Targeting=${isTargetingSpell}, Placing=${isPlacingBuilding}`); }
                      });
                  } else { newButton.disabled = true; }
             });
@@ -856,24 +1074,13 @@
         // --- Initial Setup on Load ---
         window.onload = () => { /* ... (no changes) ... */
              console.log("Window loaded. Setting up Deck Builder.");
-             if (!deckBuilderScreen || !battleScreen || !cardLibraryContainer || !selectedDeckContainer || !canvas || !ctx || !startBattleButton || !resetButton || !gameTimerDisplay || !playerElixirDisplaySpan || !playerElixirBarFill) {
-                 console.error("Essential DOM elements not found! Aborting setup.");
-                 document.body.innerHTML = '<h1 style="color:red; text-align: center;">Error loading game elements. Please refresh the page.</h1>';
-                 return;
-             }
-             try {
-                 renderCardLibrary();
-                 renderSelectedDeck();
-                 deckBuilderScreen.classList.add('active');
-                 battleScreen.classList.remove('active');
-                 console.log("Deck Builder setup complete.");
-             } catch (error) {
-                  console.error("Error during initial setup:", error);
-                  document.body.innerHTML = '<h1 style="color:red; text-align: center;">An error occurred during setup. Please refresh.</h1>';
-             }
+             if (!deckBuilderScreen || !battleScreen || !cardLibraryContainer || !selectedDeckContainer || !canvas || !ctx || !startBattleButton || !resetButton || !gameTimerDisplay || !playerElixirDisplaySpan || !playerElixirBarFill || !placementIndicator) {
+                 console.error("Essential DOM elements not found! Aborting setup."); document.body.innerHTML = '<h1 style="color:red; text-align: center;">Error loading game elements. Please refresh the page.</h1>'; return;
+             } try { renderCardLibrary(); renderSelectedDeck(); deckBuilderScreen.classList.add('active'); battleScreen.classList.remove('active'); console.log("Deck Builder setup complete."); }
+             catch (error) { console.error("Error during initial setup:", error); document.body.innerHTML = '<h1 style="color:red; text-align: center;">An error occurred during setup. Please refresh.</h1>'; }
         };
 
-        // Override populateBattleControls
+        // Override populateBattleControls to ensure listeners are re-attached
         const originalPopulateBattleControls = populateBattleControls;
         populateBattleControls = () => {
             originalPopulateBattleControls();
