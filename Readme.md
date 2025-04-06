@@ -26,6 +26,10 @@ A browser-based strategic tower defense game inspired by Clash Royale, built wit
   - 🤺 Knight - Balanced warrior
   - 🦇 Bats - Flying swarm
   - 🔥 Fireball - Area damage spell
+  - 🪵 The Log - Pushback spell
+  - 🏰 Cannon - Defensive building
+  - 🐗 Hog Rider - Fast building-targeting unit
+
 
 - **Game Mechanics**
   - Tower defense gameplay
